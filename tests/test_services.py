@@ -56,3 +56,32 @@ async def test_api_v1_prefixed_routes(client: AsyncClient):
     response = await client.get("/api/v1/locations")
     assert response.status_code == 200
     assert len(response.json()) == 3
+
+
+@pytest.mark.asyncio
+async def test_root_endpoint(client: AsyncClient):
+    response = await client.get("/")
+    assert response.status_code == 200
+    data = response.json()
+    assert "message" in data
+    assert "docs" in data
+    assert data["locations_endpoint"] == "/locations"
+
+
+@pytest.mark.asyncio
+async def test_storage_presign_download_and_delete(client: AsyncClient):
+    # Test presigned download URL generation
+    presign_res = await client.get("/storage/presign/models/test_scene.glb")
+    assert presign_res.status_code == 200
+    presign_data = presign_res.json()
+    assert presign_data["key"] == "models/test_scene.glb"
+    assert "download_url" in presign_data
+    assert presign_data["expires_in_seconds"] == 3600
+
+    # Test deleting object
+    del_res = await client.delete("/storage/object/models/test_scene.glb")
+    assert del_res.status_code == 200
+    del_data = del_res.json()
+    assert del_data["status"] == "deleted"
+    assert del_data["key"] == "models/test_scene.glb"
+

@@ -91,3 +91,41 @@ async def test_location_crud_lifecycle(client: AsyncClient):
     # 6. Verify it is gone
     get_after_del = await client.get("/locations/loc_4_kaban_lake")
     assert get_after_del.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_update_and_delete_nonexistent_location(client: AsyncClient):
+    # Update non-existent
+    put_res = await client.put("/locations/nonexistent_loc", json={"title": "Ghost"})
+    assert put_res.status_code == 404
+
+    # Delete non-existent
+    del_res = await client.delete("/locations/nonexistent_loc")
+    assert del_res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_delete_location_cascades_user_progress(client: AsyncClient):
+    # 1. Complete location 1 for a session to record progress
+    session_header = {"X-Session-ID": "test-session-cascade-1234"}
+    prog_res = await client.post(
+        "/progress/loc_1_shurale",
+        headers=session_header,
+        json={"completed": True},
+    )
+    assert prog_res.status_code == 200
+
+    # Verify passport contains the artifact
+    pass_res = await client.get("/passport", headers=session_header)
+    assert pass_res.status_code == 200
+    assert pass_res.json()["collected_count"] == 1
+
+    # 2. Delete the location
+    del_res = await client.delete("/locations/loc_1_shurale")
+    assert del_res.status_code == 200
+
+    # 3. Verify passport progress record for that location was cleaned up
+    pass_after = await client.get("/passport", headers=session_header)
+    assert pass_after.status_code == 200
+    assert pass_after.json()["collected_count"] == 0
+

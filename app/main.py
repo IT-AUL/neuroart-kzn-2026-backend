@@ -50,7 +50,21 @@ async def lifespan(app: FastAPI):
     async with async_session_factory() as session:
         await seed_locations(session)
 
+    logger.info("Checking POI dataset seeds...")
+    async with async_session_factory() as session:
+        from sqlalchemy import update
+        from app.db.models.poi import Poi
+        from app.services.poi.sync_manager import PoiSyncManager
+
+        poi_status = await PoiSyncManager.get_sync_status(session)
+        if poi_status["total_pois"] == 0:
+            logger.info("Initializing baseline Kazan POIs...")
+            await PoiSyncManager.sync_pois(session, area_name="Kazan")
+            await session.execute(update(Poi).values(status="approved"))
+            await session.commit()
+
     logger.info("Application startup complete.")
+
     yield
     logger.info("Shutting down application...")
     await engine.dispose()

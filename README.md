@@ -54,3 +54,27 @@ docker compose up --build -d
 4. **Интеграция с Yandex Cloud**:
    - **Object Storage (S3)**: хранение и прямая раздача 3D моделей `.glb`, маркеров и иконок.
    - **Yandex LLM (YandexGPT / Alice)**: контекстный фольклорный гид (`POST /locations/{id}/chat`).
+5. **Парсер POI (OpenStreetMap) и рекомендатель для редактора квестов (`/poi`)**:
+   - Автоматический парсинг памятников, музеев, исторических кварталов и парков Казани из Overpass API.
+   - Двухуровневое авто-тегирование: 6 категорий (`monument`, `museum_culture`, `historic_quarter`, `nature_view`, `folklore_legends`, `architecture_heritage`) и 6 семантических тегов (`tatar_culture`, `unesco`, `ar_friendly`, `waterfront`, `photo_spot`, `family_friendly`).
+   - Панель модерации (HITL): `GET /poi/admin/pending` и `POST /poi/admin/{id}/review`.
+   - Рекомендации точек по координатам (`GET /poi/recommendations`) с расчетом дистанции (Haversine) и релевантности.
+   - Конвертация POI в готовую точку квеста в один клик (`POST /locations/from-poi`).
+   - Возможность автономного запуска микросервиса: `uv run python -m app.services.poi.standalone --port 8001`.
+
+---
+
+## Скрипты проверки и демонстрации
+
+* **Боевая проверка Yandex S3 и YandexGPT**:
+  ```powershell
+  uv run python scripts/verify_yandex_integrations.py
+  ```
+* **Боевая проверка парсинга OSM и разметки данных**:
+  ```powershell
+  uv run python scripts/verify_poi_tagging_live.py
+  ```
+* **Сквозная демонстрация сценария редактора квестов**:
+  ```powershell
+  uv run python scripts/demo_editor_flow.py
+  ```

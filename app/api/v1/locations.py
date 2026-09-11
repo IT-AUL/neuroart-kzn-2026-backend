@@ -1,17 +1,24 @@
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.db.models.poi import Poi
 from app.schemas.ai import (
     ApproveContentRequest,
     GenerateLocationContentRequest,
     GenerateLocationContentResponse,
 )
 from app.schemas.location import (
+    ArtifactSchema,
+    CoordinatesSchema,
     LocationCreateRequest,
     LocationResponse,
     LocationUpdateRequest,
+    MarkerSchema,
+    TextsSchema,
 )
+from app.schemas.poi import CreateLocationFromPoiRequest
 from app.services.location_service import LocationService
 from app.services.yandex_llm_service import yandex_llm_service
 
@@ -21,6 +28,70 @@ router = APIRouter(prefix="/locations", tags=["Locations"])
 # ============================================================================
 # Editor & AI HITL Endpoints (Must precede /{id} parameter routes)
 # ============================================================================
+
+@router.post(
+    "/from-poi",
+    response_model=LocationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Editor: Convert a recommended POI into an active Quest Location",
+    description=(
+        "Takes a POI ID from the recommendation service, creates a corresponding Location "
+        "with pre-filled coordinates, lore layers, placeholder 3D marker, and mechanics configuration."
+    ),
+)
+async def create_location_from_poi(
+    payload: CreateLocationFromPoiRequest,
+    db: AsyncSession = Depends(get_db),
+) -> LocationResponse:
+    query = select(Poi).where(Poi.id == payload.poi_id)
+    res = await db.execute(query)
+    poi = res.scalar_one_or_none()
+
+    if not poi:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"POI with ID '{payload.poi_id}' not found",
+        )
+
+    # Generate slug ID
+    slug_suffix = poi.id.replace("poi_", "").replace("/", "_")
+    loc_id = f"loc_{payload.order}_{slug_suffix}"[:64]
+
+    title = payload.custom_title or poi.name
+    tags_str = ", ".join(f"#{t}" for t in (poi.tags or []))
+    layer1 = poi.description or f"Интерактивная точка маршрута: {poi.name}."
+    layer2 = f"Категория: {poi.category}. Теги: {tags_str}" if tags_str else f"Категория: {poi.category}."
+
+    loc_create = LocationCreateRequest(
+        id=loc_id,
+        order=payload.order,
+        priority=payload.priority,
+        title=title,
+        mechanic=payload.mechanic,
+        mechanic_params={
+            "path": "marker_trace_path",
+            "tolerance": 20.0,
+        } if payload.mechanic == "trace" else {},
+        marker=MarkerSchema(type="image", asset=f"marker_{poi.category}.png"),
+        model_url=f"models/{poi.category}_scene.glb",
+        models=[],
+        coordinates=CoordinatesSchema(x=0.0, y=0.0, z=0.0, scale=1.0),
+        animations=[],
+        texts=TextsSchema(
+            layer1=layer1,
+            layer2=layer2,
+            action_hint=f"Наведите камеру на {poi.name}, чтобы активировать AR-сцену.",
+        ),
+        artifact=ArtifactSchema(
+            id=f"art_{loc_id}",
+            name=f"Сувенир: {title[:25]}",
+            icon=f"icons/art_{poi.category}.png",
+        ),
+    )
+
+    service = LocationService(db)
+    return await service.create_location(payload=loc_create)
+
 
 @router.post(
     "/editor/generate-content",

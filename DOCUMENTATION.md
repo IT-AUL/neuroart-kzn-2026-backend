@@ -25,11 +25,12 @@ neuroart-kzn-2026-backend/
 │   │   ├── deps.py                  # Извлечение и валидация X-Session-ID, внедрение сессий БД
 │   │   └── v1/
 │   │       ├── router.py            # Агрегатор маршрутов
-│   │       ├── locations.py         # GET /locations, GET /locations/{id}
+│   │       ├── locations.py         # GET/POST /locations, POST /locations/from-poi
 │   │       ├── progress.py          # POST /progress/{location_id}, POST /progress/verify/{id}
 │   │       ├── passport.py          # GET /passport
 │   │       ├── ai.py                # POST /locations/{id}/chat (YandexGPT гид)
-│   │       └── storage.py           # Статус S3, загрузка ассетов, presigned URL
+│   │       ├── storage.py           # Статус S3, загрузка ассетов, presigned URL
+│   │       └── poi.py               # Рекомендации точек, модерация (HITL), синхронизация OSM
 │   ├── core/
 │   │   ├── config.py                # Pydantic Settings конфигурация
 │   │   ├── database.py              # Асинхронный движок SQLAlchemy и фабрика сессий
@@ -38,36 +39,48 @@ neuroart-kzn-2026-backend/
 │   │   ├── base.py                  # Базовый класс моделей SQLAlchemy
 │   │   ├── models/
 │   │   │   ├── location.py          # ORM-модель точки маршрута с JSON-полями
+│   │   │   ├── poi.py               # ORM-модели Poi и PoiSyncLog
 │   │   │   └── progress.py          # ORM-модель прогресса сессии и трофеев
 │   │   └── seeds/
 │   │       ├── initial_data.py      # Фиксированные данные трех точек маршрута
 │   │       └── seeder.py            # Идемпотентный сидер БД при старте сервиса
 │   ├── schemas/
-│   │   ├── location.py              # Схемы Pydantic точек, координат, маркеров, параметров механик
+│   │   ├── location.py              # Схемы точек, координат, маркеров, параметров механик
 │   │   ├── passport.py              # Схемы паспорта и собранных артефактов
 │   │   ├── progress.py              # Схемы отправки телеметрии прохождения и ответа
 │   │   ├── storage.py               # Схемы ответов S3
-│   │   └── ai.py                    # Схемы запросов и ответов диалога с LLM
+│   │   ├── ai.py                    # Схемы запросов и ответов диалога с LLM
+│   │   └── poi.py                   # Схемы POI, рекомендаций, модерации и конвертации
 │   ├── services/
 │   │   ├── location_service.py      # Бизнес-логика точек и резолва URL моделей
 │   │   ├── passport_service.py      # Учет прогресса, слоты паспорта, идемпотентность
 │   │   ├── s3_service.py            # Клиент Yandex Object Storage (загрузка, presigned URL)
 │   │   ├── yandex_llm_service.py    # Клиент YandexGPT (OpenAI-совместимый и нативный протоколы)
+│   │   ├── poi/                     # Микросервис / модуль POI и рекомендаций
+│   │   │   ├── osm_client.py        # Клиент Overpass API и резервный датасет Казани
+│   │   │   ├── tag_engine.py        # Двухуровневая классификация и стемминг тегов
+│   │   │   ├── sync_manager.py      # Синхронизация и защита кураторских правок
+│   │   │   ├── recommender.py       # Пространственный (Haversine) и тематический скоринг
+│   │   │   └── standalone.py        # Автономный раннер микросервиса (порт 8001)
 │   │   └── mechanics/               # Движок валидации и физики игровых механик
 │   │       ├── base.py              # Базовый интерфейс валидатора механик
 │   │       ├── trace.py             # Геометрическая валидация обводки контура (trace)
 │   │       ├── tap_climb.py         # Физическая симуляция лазания на столб (tap_climb)
+│   │       ├── tap_strike.py        # Валидация механики тапа и удара (tap_strike)
 │   │       └── none_mechanic.py     # Логика точек без мини-игры (none)
-│   └── main.py                      # Точка входа, lifespan (авто-создание таблиц и сидинг), CORS
+│   └── main.py                      # Точка входа, lifespan (авто-создание таблиц, сидинг POI и точек)
 ├── scripts/
-│   └── verify_yandex_integrations.py # Скрипт проверки боевого подключения к S3 и LLM
-├── tests/                           # Комплекс автоматических тестов (22 теста)
+│   ├── verify_yandex_integrations.py # Скрипт проверки боевого подключения к S3 и LLM
+│   ├── verify_poi_tagging_live.py   # Скрипт боевой проверки парсинга OSM и разметки тегов
+│   └── demo_editor_flow.py          # Сквозной тест сценария редактора квестов
+├── tests/                           # Комплекс автоматических тестов (49 тестов)
 ├── .env.example                     # Шаблон переменных окружения
 ├── Dockerfile                       # Продакшн Dockerfile
 ├── docker-compose.yml               # Запуск сервиса в контейнере
 ├── pyproject.toml                   # Зависимости и метаданные проекта
 └── pytest.ini                       # Настройки pytest
 ```
+
 
 ---
 
@@ -96,7 +109,35 @@ neuroart-kzn-2026-backend/
 
 ---
 
+### 2.1. Модель данных: Точка интереса POI (`Poi`) и лог синхронизации (`PoiSyncLog`)
+
+Модель `pois` хранит распарсенные из OpenStreetMap и размеченные тегами объекты городской среды:
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `id` | `string` | Уникальный ID объекта (например, `poi_node_10000001`) |
+| `osm_id` | `string` | Идентификатор OSM (`node/12345678` или `way/987654`) |
+| `osm_type` | `string` | Тип геометрии в OSM (`node`, `way`, `relation`) |
+| `name` | `string` | Основное название объекта (русское или локализованное) |
+| `name_en` / `name_tt` | `string?` | Английское и татарское наименования (если доступны в OSM) |
+| `latitude` / `longitude` | `float` | Географические координаты точки |
+| `category` | `string` | Текущая подтвержденная категория (`monument`, `museum_culture`, `historic_quarter`, `nature_view`, `folklore_legends`, `architecture_heritage`) |
+| `tags` | `array` | Список подтвержденных семантических тегов (`tatar_culture`, `unesco`, `ar_friendly`, `waterfront`, `photo_spot`, `family_friendly`) |
+| `proposed_category` | `string?` | Категория, автоматически предложенная парсером |
+| `proposed_tags` | `array` | Семантические теги, автоматически предложенные парсером |
+| `raw_osm_tags` | `object` | Исходный JSON всех тегов из OpenStreetMap |
+| `description` | `string?` | Историческая справка или выдержка из Википедии |
+| `status` | `string` | Статус модерации: `pending` (ожидает проверки), `approved` (подтверждено), `rejected` |
+| `confidence_score` | `float` | Оценка уверенности авто-разметки (0.0 — 1.0) |
+| `admin_notes` | `string?` | Заметки модератора / куратора квестов |
+| `last_synced_at` | `datetime` | Дата последнего обновления геометрии из OSM |
+
+Таблица `poi_sync_logs` хранит историю периодических синхронизаций (`started_at`, `completed_at`, `status`, `points_scanned`, `points_created`, `points_updated`, `error_message`).
+
+---
+
 ## 3. Точки маршрута и их наполнение
+
 
 В сервис заложены 3 предустановленные точки:
 
@@ -476,6 +517,109 @@ neuroart-kzn-2026-backend/
 
 ---
 
+### 7.6. Парсер точек (OSM) и рекомендатель квестов для редактора
+
+Сервис парсит достопримечательности (POI) Казани из OpenStreetMap (Overpass API), выполняет автоматическую разметку категориями и семантическими тегами, предоставляет интерфейс модерации (HITL) для подтверждения тегов администратором и рекомендует релевантные точки редактору квестов.
+
+#### Таксономия категорий и тегов:
+* **Категории (`category`)**:
+  * `monument` — памятники, монументы, мемориалы, скульптуры.
+  * `museum_culture` — музеи, галереи, театры, культурные центры.
+  * `historic_quarter` — исторические слободы, Кремль, древние усадьбы.
+  * `nature_view` — парки, набережные, смотровые площадки, озера.
+  * `folklore_legends` — фольклорные и сказочные персонажи (Зилант, Шурале, Кот Казанский).
+  * `architecture_heritage` — архитектурные доминанты, исторические башни, храмы.
+* **Семантические теги (`tags`)**:
+  * `tatar_culture` — связь с татарской культурой и историей.
+  * `unesco` — объекты всемирного наследия ЮНЕСКО.
+  * `ar_friendly` — пешеходные зоны и площади, удобные для AR.
+  * `waterfront` — расположение у воды (оз. Кабан, р. Казанка, р. Волга).
+  * `photo_spot` — видовые точки и панорамы.
+  * `family_friendly` — объекты для семейного и детского досуга.
+
+#### Основные эндпоинты:
+
+##### 1. `GET /poi/recommendations`
+Умные рекомендации точек для редактора квестов с расчетом расстояния по формуле гаверсинусов, пересечения тегов и кураторских бейджей.
+* **Параметры**:
+  * `near_lat`, `near_lon`: координаты центра карты или предыдущей точки маршрута
+  * `radius_meters`: радиус поиска в метрах (по умолчанию 2500 м)
+  * `category`: фильтр по категории (`monument`, `museum_culture`, `historic_quarter`, `nature_view`, `folklore_legends`, `architecture_heritage`)
+  * `tags`: список тегов через запятую (например, `tatar_culture,ar_friendly`)
+  * `search`: текстовый поиск по названию или описанию
+  * `status`: статус модерации (`approved` по умолчанию, `pending`, `all`)
+  * `exclude_ids`: список ID уже добавленных в квест точек для исключения
+  * `limit`: ограничение количества (по умолчанию 10)
+* **Ответ `200 OK`**:
+```json
+[
+  {
+    "poi": {
+      "id": "poi_node_node_10000002",
+      "osm_id": "node/10000002",
+      "osm_type": "node",
+      "name": "Башня Сююмбике",
+      "name_en": "Suyumbike Tower",
+      "name_tt": "Сөембикә манарасы",
+      "latitude": 55.7997,
+      "longitude": 49.1055,
+      "category": "architecture_heritage",
+      "tags": ["unesco", "verified_quest_anchor", "photo_spot", "tatar_culture"],
+      "description": "Проездная дозорная башня в Казанском кремле. Падающая башня, символ Казани.",
+      "status": "approved",
+      "confidence_score": 0.85
+    },
+    "distance_meters": 146.0,
+    "match_score": 0.67,
+    "reasons": [
+      "В шаговой доступности (146 м)",
+      "Проверено модератором"
+    ]
+  }
+]
+```
+
+##### 2. `POST /poi/admin/{poi_id}/review`
+Интерфейс модерации (HITL) для подтверждения или корректировки предложенных тегов администратором.
+* **Тело запроса**:
+```json
+{
+  "status": "approved",
+  "category": "architecture_heritage",
+  "tags": ["unesco", "verified_quest_anchor", "photo_spot", "tatar_culture"],
+  "admin_notes": "Подтверждено главным куратором квестов"
+}
+```
+* **Ответ `200 OK`**: обновленный объект POI со статусом `approved`.
+
+##### 3. `POST /locations/from-poi`
+Мгновенная конвертация рекомендованной точки интереса в активную точку интерактивного AR-маршрута (`Location`).
+* **Тело запроса**:
+```json
+{
+  "poi_id": "poi_node_node_10000002",
+  "order": 4,
+  "priority": "P1",
+  "mechanic": "trace",
+  "custom_title": "AR Квест: Башня Сююмбике"
+}
+```
+* **Ответ `201 Created`**: полностью сформированный объект `LocationResponse` с авто-заполнением слоев текстов (`layer1`, `layer2`), параметров механики, маркера, 3D-модели и трофея для паспорта.
+
+##### 4. Управление синхронизацией:
+* `GET /poi/admin/pending` — список объектов, ожидающих модерации (поддерживает фильтрацию и пагинацию `limit`, `offset`).
+* `POST /poi/admin/batch-approve` — пакетное подтверждение списка точек (`{"poi_ids": ["..."], "status": "approved"}`).
+* `POST /poi/sync/run` — запуск синхронизации с Overpass API (`{"area_name": "Kazan", "force_remote": false, "dry_run": false}`).
+* `GET /poi/sync/status` — статус базы POI, счетчики категорий и лог последних синхронизаций.
+
+#### Запуск сервиса как автономного микросервиса:
+Сервис спроектирован по модульной архитектуре и может запускаться как независимый микросервис на отдельном порту:
+```powershell
+uv run python -m app.services.poi.standalone --port 8001
+```
+
+---
+
 ## 8. Конфигурация переменных окружения (`.env`)
 
 Все параметры конфигурируются в файле `.env` в корне проекта (шаблон в `.env.example`):
@@ -535,8 +679,19 @@ docker compose up --build -d
 uv run python scripts/verify_yandex_integrations.py
 ```
 
+### Проверка боевой разметки POI из OpenStreetMap
+```powershell
+uv run python scripts/verify_poi_tagging_live.py
+```
+
+### Демонстрация сценария редактора квестов
+```powershell
+uv run python scripts/demo_editor_flow.py
+```
+
 ### Запуск полного набора автотестов
 ```powershell
 uv run pytest -v
 ```
-*(Все 22 теста проверяют схемы, эндпоинты, идемпотентность, изоляцию сессий, физику механик, загрузку S3 и ответы LLM).*
+*(Комплекс из **49 автотестов** проверяет POI парсер и тегирование, HITL-модерацию, рекомендации для редактора, CRUD локаций, каскадное удаление прогресса, схемы паспорта, изоляцию сессий, физику механик, загрузку в S3 и генерацию контента Yandex LLM).*
+

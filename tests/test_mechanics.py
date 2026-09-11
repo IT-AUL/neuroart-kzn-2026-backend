@@ -163,3 +163,52 @@ async def test_api_verify_simulation_endpoint(client: AsyncClient):
     assert data["success"] is True
     assert data["score"] >= 100.0
 
+
+def test_none_mechanic_validator_and_fallback():
+    from app.services.mechanics import get_mechanic_validator
+    from app.services.mechanics.none_mechanic import NoneMechanicValidator
+
+    validator = NoneMechanicValidator()
+    res1 = validator.validate({}, None)
+    assert res1.success is True
+    assert res1.score == 100.0
+
+    res2 = validator.validate({}, {"arbitrary_key": "val"})
+    assert res2.success is True
+
+    # Fallback to NoneMechanicValidator on unknown mechanic name
+    fallback_val = get_mechanic_validator("completely_unknown_mechanic")
+    assert isinstance(fallback_val, NoneMechanicValidator)
+
+
+def test_trace_placeholder_path_and_empty_handling():
+    validator = TraceMechanicValidator()
+
+    # Artist placeholder string path with completed=True
+    res_placeholder_ok = validator.validate({"path": "contour_mesh_placeholder"}, {"completed": True})
+    assert res_placeholder_ok.success is True
+    assert res_placeholder_ok.score == 100.0
+
+    # Artist placeholder string path with completed=False
+    res_placeholder_fail = validator.validate({"path": "contour_mesh_placeholder"}, {"completed": False})
+    assert res_placeholder_fail.success is False
+
+    # Empty user path without completed flag
+    res_empty = validator.validate({"path": [{"x": 0.1, "y": 0.1}]}, {"user_path": []})
+    assert res_empty.success is False
+
+
+@pytest.mark.asyncio
+async def test_api_verify_simulation_failure_returns_200_with_false(client: AsyncClient):
+    # Verify that the simulation endpoint returns HTTP 200 with success=False, NOT a 422 HTTP exception
+    payload = {
+        "taps_count": 3,
+        "duration_seconds": 12.0,
+    }
+    response = await client.post("/progress/verify/loc_2_sabantuy", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is False
+    assert data["score"] < 100.0
+
+
