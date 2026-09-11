@@ -15,11 +15,36 @@ logging.basicConfig(
 logger = logging.getLogger("neuroart")
 
 
+def _sync_sqlite_migrate(sync_conn):
+    """Ensure missing columns are added to existing SQLite tables without losing data."""
+    try:
+        res = sync_conn.exec_driver_sql("PRAGMA table_info(locations);")
+        columns = {row[1] for row in res.fetchall()}
+        if columns:
+            if "models" not in columns:
+                sync_conn.exec_driver_sql("ALTER TABLE locations ADD COLUMN models JSON NOT NULL DEFAULT '[]';")
+                logger.info("Auto-migrated SQLite: added column locations.models")
+            if "next_location_id" not in columns:
+                sync_conn.exec_driver_sql("ALTER TABLE locations ADD COLUMN next_location_id VARCHAR(64) NULL;")
+                logger.info("Auto-migrated SQLite: added column locations.next_location_id")
+            if "next_location_order" not in columns:
+                sync_conn.exec_driver_sql("ALTER TABLE locations ADD COLUMN next_location_order INTEGER NULL;")
+                logger.info("Auto-migrated SQLite: added column locations.next_location_order")
+            if "next_location_hint" not in columns:
+                sync_conn.exec_driver_sql("ALTER TABLE locations ADD COLUMN next_location_hint VARCHAR(512) NULL;")
+                logger.info("Auto-migrated SQLite: added column locations.next_location_hint")
+    except Exception as exc:
+        logger.error("Schema auto-migration error: %s", exc)
+        raise exc
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing database tables...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_sync_sqlite_migrate)
 
     logger.info("Running location seeds...")
     async with async_session_factory() as session:
@@ -29,6 +54,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("Shutting down application...")
     await engine.dispose()
+
 
 
 app = FastAPI(
