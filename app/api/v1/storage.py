@@ -1,4 +1,5 @@
 from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi.responses import RedirectResponse
 from app.schemas.storage import (
     S3PresignedUploadRequest,
     S3PresignedUploadResponse,
@@ -18,6 +19,27 @@ router = APIRouter(prefix="/storage", tags=["Yandex Object Storage (S3)"])
 )
 async def get_storage_status() -> S3StatusResponse:
     return await s3_service.check_status()
+
+
+@router.get(
+    "/files",
+    summary="List files and assets stored in Yandex S3 bucket",
+    description="Returns files in bucket optionally filtered by folder prefix (e.g. 'models', 'markers', 'icons')",
+)
+async def list_storage_files(
+    prefix: str = Query("", description="Folder or key prefix, e.g. 'icons' or 'models'"),
+    limit: int = Query(100, ge=1, le=500),
+):
+    return await s3_service.list_objects(prefix=prefix, limit=limit)
+
+
+@router.get(
+    "/asset/{key:path}",
+    summary="Directly view or download an asset image/model via presigned redirect",
+)
+async def view_asset_file(key: str):
+    presigned = await s3_service.generate_presigned_download_url(key=key, expires_in_seconds=3600)
+    return RedirectResponse(url=presigned.download_url, status_code=307)
 
 
 @router.post(

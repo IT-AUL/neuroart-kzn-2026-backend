@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Список точек квеста{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Точки маршрута и квесты</h1>
+    <p class="page-subtitle">Управление интерактивными локациями, AR-механиками и переходом между точками</p>
+  </div>
+  <div style="display:flex;gap:0.5rem;">
+    <a href="/admin/quests/new" class="btn btn-primary">+ Создать новую точку</a>
+    <a href="/admin/pois" class="btn btn-secondary">Добавить из POI &rarr;</a>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">Список точек ({{ locations|length }})</h2>
+    <span style="font-size:0.8rem;color:var(--text-muted);">Сортировка по порядку прохождения</span>
+  </div>
+  <div class="table-container">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th style="width:50px;">№</th>
+          <th style="width:80px;">Приоритет</th>
+          <th>Точка и описание</th>
+          <th>Механика</th>
+          <th>3D Модель / Маркер</th>
+          <th>Следующая точка</th>
+          <th style="text-align:right;width:200px;">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loc in locations %}
+        <tr id="row-{{ loc.id }}">
+          <td>
+            <div style="font-weight:700;font-size:1.1rem;color:var(--primary);">#{{ loc.order }}</div>
+          </td>
+          <td>
+            <span class="badge badge-{{ loc.priority|lower }}">{{ loc.priority }}</span>
+          </td>
+          <td>
+            <div style="font-weight:600;font-size:0.95rem;">
+              <a href="/admin/quests/{{ loc.id }}/edit" style="color:var(--text-main);text-decoration:none;">{{ loc.title }}</a>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
+              <code>{{ loc.id }}</code>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              {{ loc.texts.layer1 if loc.texts else '' }}
+            </div>
+          </td>
+          <td>
+            <span class="badge badge-mechanic">{{ loc.mechanic }}</span>
+            {% if loc.mechanic_params %}
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px;">
+              {% if loc.mechanic == 'trace' %}
+                погрешность: {{ loc.mechanic_params.tolerance or '20' }}px
+              {% elif loc.mechanic == 'tap_climb' %}
+                шаг: +{{ loc.mechanic_params.gain_per_tap or '4' }}
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
+          <td>
+            <div style="font-size:0.75rem;"><strong>3D:</strong> {{ loc.model_url or '—' }}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);"><strong>Маркер:</strong> {{ loc.marker.asset if loc.marker else '—' }}</div>
+          </td>
+          <td>
+            {% if loc.next_location_id %}
+              <div style="font-size:0.8rem;font-weight:600;">№{{ loc.next_location_order or '?' }} ({{ loc.next_location_id }})</div>
+              <div style="font-size:0.7rem;color:var(--text-muted);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                {{ loc.next_location_hint or '' }}
+              </div>
+            {% else %}
+              <span style="font-size:0.75rem;color:var(--text-muted);font-style:italic;">Финишная точка</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex;gap:0.35rem;">
+              <a href="/admin/quests/{{ loc.id }}/edit" class="btn btn-sm btn-primary">✏️ Править</a>
+              <button type="button" class="btn btn-sm btn-danger" onclick="promptDeleteQuest('{{ loc.id }}', '{{ loc.title|escape }}')">🗑️</button>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
+            Точки маршрута еще не добавлены. Нажмите "+ Создать новую точку", чтобы начать.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

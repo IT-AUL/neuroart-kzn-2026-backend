@@ -1,7 +1,10 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from app.admin.router import router as admin_router
 from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.database import async_session_factory, engine
@@ -95,6 +98,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Static files for Admin Panel
+static_dir = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+# Admin Panel & Quest Editor (Jinja2 SSR)
+app.include_router(admin_router)
+
 # Root-level endpoints matching prompt specifications directly:
 # /locations, /locations/{id}, /progress/{location_id}, /passport
 app.include_router(api_v1_router)
@@ -118,6 +128,7 @@ async def root():
     return {
         "message": "Welcome to NeuroArt KZN 2026 Backend API",
         "docs": "/docs",
+        "admin_panel": "/admin",
         "locations_endpoint": "/locations",
         "passport_endpoint": "/passport",
     }

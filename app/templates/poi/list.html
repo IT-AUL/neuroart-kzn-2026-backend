@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Модерация объектов POI{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Модерация объектов (POI)</h1>
+    <p class="page-subtitle">Проверка объектов, синхронизированных из OpenStreetMap, и преобразование их в активные квесты</p>
+  </div>
+  <div style="display:flex;gap:0.5rem;">
+    <a href="/admin/sync" class="btn btn-secondary">🔄 Синхронизация OSM</a>
+    <a href="/admin/quests" class="btn btn-primary">К списку квестов &rarr;</a>
+  </div>
+</div>
+
+<!-- Tabs/Filter Bar -->
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+  <div style="display:flex;gap:0.5rem;">
+    <a href="/admin/pois?status=pending" class="btn btn-sm {% if current_status == 'pending' %}btn-primary{% else %}btn-secondary{% endif %}">
+      Ожидают проверки ({{ pending_count }})
+    </a>
+    <a href="/admin/pois?status=approved" class="btn btn-sm {% if current_status == 'approved' %}btn-primary{% else %}btn-secondary{% endif %}">
+      Одобренные POI ({{ approved_count }})
+    </a>
+  </div>
+  <form method="GET" action="/admin/pois" style="display:flex;gap:0.5rem;">
+    <input type="hidden" name="status" value="{{ current_status }}">
+    <input type="text" name="search" class="form-control" style="width:240px;padding:0.35rem 0.65rem;" placeholder="Поиск по названию..." value="{{ search_query or '' }}">
+    <button type="submit" class="btn btn-sm btn-secondary">Найти</button>
+  </form>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">Список POI ({{ pois|length }})</h2>
+    <span style="font-size:0.8rem;color:var(--text-muted);">Статус: {{ current_status }}</span>
+  </div>
+  <div class="table-container">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>Объект</th>
+          <th>Категория</th>
+          <th>Теги</th>
+          <th>Координаты</th>
+          <th style="text-align:right;width:240px;">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for poi in pois %}
+        <tr id="poi-row-{{ poi.id }}">
+          <td>
+            <div style="font-weight:600;font-size:0.95rem;">{{ poi.name }}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">ID: <code>{{ poi.id }}</code></div>
+            {% if poi.description %}
+              <div style="font-size:0.8rem;color:var(--text-muted);margin-top:2px;max-width:380px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                {{ poi.description }}
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge badge-secondary">{{ poi.category }}</span>
+          </td>
+          <td>
+            {% for tag in (poi.tags or []) %}
+              <span class="badge" style="background:#f1f5f9;color:#475569;margin-right:2px;font-size:0.7rem;">#{{ tag }}</span>
+            {% else %}
+              <span style="color:var(--text-muted);font-size:0.75rem;">нет тегов</span>
+            {% endfor %}
+          </td>
+          <td>
+            <div style="font-size:0.75rem;font-family:monospace;">
+              {{ "%.4f"|format(poi.latitude) }}, {{ "%.4f"|format(poi.longitude) }}
+            </div>
+          </td>
+          <td style="text-align:right;">
+            <div style="display:inline-flex;gap:0.35rem;">
+              <button type="button" class="btn btn-sm btn-primary" onclick="promptConvertPoi('{{ poi.id }}', '{{ poi.name|escape }}', '{{ poi.category }}')">
+                🗺️ В квест
+              </button>
+
+              {% if poi.status == 'pending' %}
+                <button type="button" class="btn btn-sm btn-success" onclick="reviewPoi('{{ poi.id }}', 'approved')">✓</button>
+                <button type="button" class="btn btn-sm btn-danger" onclick="reviewPoi('{{ poi.id }}', 'rejected')">✕</button>
+              {% elif poi.status == 'approved' %}
+                <button type="button" class="btn btn-sm btn-secondary" onclick="reviewPoi('{{ poi.id }}', 'pending')">В ожидание</button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" style="text-align:center;padding:2.5rem;color:var(--text-muted);">
+            Объекты со статусом "{{ current_status }}" не найдены.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Convert POI to Quest -->
+<div id="modal-convert-poi" class="modal-overlay">
+  <div class="modal-content">
+    <h3 class="modal-title">Преобразовать в точку квеста</h3>
+    <p>Создание активной точки маршрута на основе: <strong id="convert-poi-name"></strong></p>
+
+    <div style="margin-top:1rem;display:flex;flex-direction:column;gap:0.85rem;">
+      <div class="form-group">
+        <label class="form-label" for="convert-poi-title">Название точки</label>
+        <input type="text" id="convert-poi-title" class="form-control">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="convert-poi-order">Порядковый номер маршрута</label>
+        <input type="number" id="convert-poi-order" class="form-control" value="10" min="1">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="convert-poi-priority">Приоритет</label>
+        <select id="convert-poi-priority" class="form-control">
+          <option value="P0">P0 — Обязательная</option>
+          <option value="P1" selected>P1 — Стандартная</option>
+          <option value="P2">P2 — Опциональная</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="convert-poi-mechanic">AR-механика</label>
+        <select id="convert-poi-mechanic" class="form-control">
+          <option value="none">none — Только лор / просмотр</option>
+          <option value="trace" selected>trace — Контурная обводка</option>
+          <option value="tap_climb">tap_climb — Подъем по шкале</option>
+          <option value="strike">strike — Тап-удары</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-convert-poi')">Отмена</button>
+      <button type="button" class="btn btn-primary" onclick="confirmConvertPoi()">Создать квест</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

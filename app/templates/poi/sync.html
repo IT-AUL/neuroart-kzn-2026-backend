@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Синхронизация OpenStreetMap{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Синхронизация с OpenStreetMap</h1>
+    <p class="page-subtitle">Обновление базы объектов культурного наследия Казани через Overpass API</p>
+  </div>
+  <div>
+    <button type="button" id="btn-trigger-sync" class="btn btn-primary" onclick="triggerOsmSync()">
+      🔄 Запустить синхронизацию OSM
+    </button>
+  </div>
+</div>
+
+<div class="grid-cards">
+  <div class="card">
+    <div class="card-title">Всего POI в базе</div>
+    <div class="card-value">{{ sync_status.total_pois }}</div>
+    <div class="card-desc">Культурных и исторических объектов</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Одобренные модератором</div>
+    <div class="card-value" style="color:var(--success)">{{ sync_status.approved_count }}</div>
+    <div class="card-desc">Готовы к созданию квестов</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ожидают проверки</div>
+    <div class="card-value" style="color:var(--warning)">{{ sync_status.pending_count }}</div>
+    <div class="card-desc">Требуют верификации тегов</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Последняя синхронизация</div>
+    <div class="card-value" style="font-size:1.1rem;padding-top:0.4rem;">
+      {{ sync_status.last_synced_at or 'Никогда' }}
+    </div>
+    <div class="card-desc">Источник: OSM Overpass (Kazan)</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">Категории объектов</h2>
+  </div>
+  <div class="section-body">
+    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+      {% for cat, count in (sync_status.categories_breakdown or {}).items() %}
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);padding:0.5rem 0.85rem;display:flex;align-items:center;gap:0.5rem;">
+        <span style="font-weight:600;font-size:0.9rem;">{{ cat }}</span>
+        <span class="badge badge-secondary">{{ count }}</span>
+      </div>
+      {% else %}
+      <span style="color:var(--text-muted);">Категории отсутствуют</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">История синхронизаций</h2>
+  </div>
+  <div class="table-container">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Время</th>
+          <th>Регион</th>
+          <th>Статус</th>
+          <th>Сканировано OSM</th>
+          <th>Добавлено / Обновлено</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in (sync_status.recent_logs or []) %}
+        <tr>
+          <td><code>#{{ log.id }}</code></td>
+          <td>{{ log.started_at or '—' }}</td>
+          <td>{{ log.area_name }}</td>
+          <td>
+            <span class="badge {% if log.status == 'success' or log.status == 'completed' %}badge-success{% else %}badge-p0{% endif %}">
+              {{ log.status }}
+            </span>
+          </td>
+          <td>{{ log.points_scanned }}</td>
+          <td>
+            <span style="color:var(--success);font-weight:600;">+{{ log.points_created }}</span> /
+            <span style="color:var(--primary);font-weight:600;">~{{ log.points_updated }}</span>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">
+            Записи о предыдущих синхронизациях отсутствуют.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

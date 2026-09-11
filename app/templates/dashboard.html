@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Обзор системы{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Панель управления NeuroArt KZN</h1>
+    <p class="page-subtitle">Интерактивный маршрут 2026: управление точками, редактор квестов и модерация POI</p>
+  </div>
+  <div style="display:flex;gap:0.5rem;">
+    <a href="/admin/quests/new" class="btn btn-primary">+ Добавить точку маршрута</a>
+    <a href="/admin/pois" class="btn btn-secondary">Модерация POI ({{ pending_pois_count }})</a>
+  </div>
+</div>
+
+<!-- Metrics Cards -->
+<div class="grid-cards">
+  <div class="card">
+    <div class="card-title">Точек маршрута</div>
+    <div class="card-value">{{ total_locations }}</div>
+    <div class="card-desc">P0: {{ p0_count }} | P1: {{ p1_count }} | P2: {{ p2_count }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Игровые механики</div>
+    <div class="card-value" style="font-size:1.3rem;padding-top:0.35rem;">
+      Trace: {{ mechanics_count.get('trace', 0) }} &bull; Climb: {{ mechanics_count.get('tap_climb', 0) }}
+    </div>
+    <div class="card-desc">None/Lore: {{ mechanics_count.get('none', 0) }} &bull; Strike: {{ mechanics_count.get('strike', 0) + mechanics_count.get('tap_strike', 0) }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">База POI (Kazan)</div>
+    <div class="card-value">{{ total_pois }}</div>
+    <div class="card-desc">Одобрено: {{ approved_pois_count }} | Ожидают: {{ pending_pois_count }}</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Интеграции</div>
+    <div class="card-value" style="font-size:1.1rem;padding-top:0.4rem;">
+      <span class="badge {% if s3_ok %}badge-success{% else %}badge-p1{% endif %}">S3: {% if s3_ok %}Подключено{% else %}Демо-мод{% endif %}</span>
+      <span class="badge {% if gpt_ok %}badge-success{% else %}badge-p1{% endif %}">GPT: {% if gpt_ok %}Активен{% else %}Фоллбэк{% endif %}</span>
+    </div>
+    <div class="card-desc">SQLite Async / SQLAlchemy 2.0</div>
+  </div>
+</div>
+
+<!-- Current Route Points Table -->
+<div class="section">
+  <div class="section-header">
+    <h2 class="section-title">🗺️ Активный маршрут ({{ locations|length }} точек)</h2>
+    <a href="/admin/quests" class="btn btn-sm btn-secondary">Полный список &rarr;</a>
+  </div>
+  <div class="table-container">
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th style="width:70px;">№</th>
+          <th style="width:90px;">Приоритет</th>
+          <th>Название точки</th>
+          <th>Механика</th>
+          <th>3D Модель</th>
+          <th>Артефакт</th>
+          <th style="text-align:right;">Действия</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for loc in locations %}
+        <tr id="row-{{ loc.id }}">
+          <td><strong>#{{ loc.order }}</strong></td>
+          <td>
+            <span class="badge badge-{{ loc.priority|lower }}">{{ loc.priority }}</span>
+          </td>
+          <td>
+            <div style="font-weight:600;color:var(--text-main);">{{ loc.title }}</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">ID: {{ loc.id }}</div>
+          </td>
+          <td>
+            <span class="badge badge-mechanic">{{ loc.mechanic }}</span>
+          </td>
+          <td>
+            <code style="font-size:0.75rem;background:#f1f5f9;padding:2px 4px;border-radius:3px;">
+              {{ loc.model_url or 'нет' }}
+            </code>
+          </td>
+          <td>
+            <span style="font-size:0.85rem;">{{ loc.artifact.name if loc.artifact else '—' }}</span>
+          </td>
+          <td style="text-align:right;">
+            <a href="/admin/quests/{{ loc.id }}/edit" class="btn btn-sm btn-secondary">✏️ Редактировать</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" style="text-align:center;padding:2rem;color:var(--text-muted);">
+            Точки маршрута еще не добавлены. Создайте первую точку или синхронизируйте POI.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

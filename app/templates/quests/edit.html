@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Редактирование точки {{ location.id }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
+      <a href="/admin/quests" style="color:var(--text-muted);text-decoration:none;font-size:0.9rem;">&larr; Назад к списку</a>
+      <span style="color:var(--text-muted);">&bull;</span>
+      <span class="badge badge-{{ location.priority|lower }}">{{ location.priority }}</span>
+      <span class="badge badge-mechanic">{{ location.mechanic }}</span>
+    </div>
+    <h1 class="page-title">{{ location.title }}</h1>
+    <p class="page-subtitle">ID: <code>{{ location.id }}</code> &bull; Порядок на маршруте: №{{ location.order }}</p>
+  </div>
+  <div style="display:flex;gap:0.5rem;">
+    <button type="button" class="btn btn-danger" onclick="promptDeleteQuest('{{ location.id }}', '{{ location.title|escape }}')">🗑️ Удалить</button>
+    <button type="button" id="btn-save-quest" class="btn btn-primary" onclick="saveQuest(false)">💾 Сохранить изменения</button>
+  </div>
+</div>
+
+<form id="quest-form" onsubmit="event.preventDefault(); saveQuest(false);">
+
+  <!-- Section 1: General Info -->
+  <div class="section">
+    <div class="section-header">
+      <h3 class="section-title">1. Основная информация</h3>
+    </div>
+    <div class="section-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="loc-id">Идентификатор (ID)</label>
+          <input type="text" id="loc-id" class="form-control" value="{{ location.id }}" readonly>
+          <span class="form-hint">Уникальный slug точки (только для чтения)</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-order">Порядковый номер маршрута *</label>
+          <input type="number" id="loc-order" class="form-control" value="{{ location.order }}" min="1" required>
+          <span class="form-hint">Позиция в последовательном прохождении (1, 2, 3...)</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-priority">Приоритет точки</label>
+          <select id="loc-priority" class="form-control">
+            <option value="P0" {% if location.priority == 'P0' %}selected{% endif %}>P0 — Обязательная (Core landmark)</option>
+            <option value="P1" {% if location.priority == 'P1' %}selected{% endif %}>P1 — Стандартная (Secondary quest)</option>
+            <option value="P2" {% if location.priority == 'P2' %}selected{% endif %}>P2 — Опциональная (Bonus/Lore)</option>
+          </select>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-title">Название точки маршрута *</label>
+          <input type="text" id="loc-title" class="form-control" value="{{ location.title }}" required>
+          <span class="form-hint">Отображается в заголовке экрана AR и в списке квестов</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 2: Mechanics -->
+  <div class="section">
+    <div class="section-header">
+      <h3 class="section-title">2. Игровая механика AR</h3>
+    </div>
+    <div class="section-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="loc-mechanic">Тип AR-механики</label>
+          <select id="loc-mechanic" class="form-control">
+            <option value="none" {% if location.mechanic == 'none' %}selected{% endif %}>none — Только просмотр / Лор</option>
+            <option value="trace" {% if location.mechanic == 'trace' %}selected{% endif %}>trace — Обводка контура пальцем</option>
+            <option value="tap_climb" {% if location.mechanic == 'tap_climb' %}selected{% endif %}>tap_climb — Быстрое тапанье (подъем/шкала)</option>
+            <option value="strike" {% if location.mechanic == 'strike' or location.mechanic == 'tap_strike' %}selected{% endif %}>strike — Удары / Тап по целям</option>
+          </select>
+          <span class="form-hint">Определяет логику интерактива в мобильном AR-клиенте</span>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-mechanic-params">Параметры механики (JSON)</label>
+          <textarea id="loc-mechanic-params" class="form-control" rows="3" style="font-family:monospace;font-size:0.85rem;">{{ location.mechanic_params | tojson(indent=2) }}</textarea>
+          <span class="form-hint">
+            Пример для trace: <code>{"path": "marker_trace_path", "tolerance": 20.0}</code>.
+            Пример для tap_climb: <code>{"gain_per_tap": 4.0, "decay_per_interval": 1.0, "decay_interval_seconds": 0.3}</code>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: 3D Assets & Coordinates -->
+  <div class="section">
+    <div class="section-header">
+      <h3 class="section-title">3. 3D Модели, Маркер и Координаты</h3>
+    </div>
+    <div class="section-body">
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-model-url">Основная 3D модель (.GLB сцена в S3)</label>
+          <div class="asset-field-wrapper">
+            <div style="flex:1;">
+              <input type="text" id="loc-model-url" class="form-control" value="{{ location.model_url or '' }}" placeholder="models/scene.glb">
+            </div>
+            <div class="asset-actions">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Загрузить локальный .GLB файл в S3">
+                📤 Загрузить в S3
+                <input type="file" accept=".glb,.gltf" style="display:none;" onchange="uploadAssetFile(this, 'models', 'loc-model-url')">
+              </label>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openS3Browser('models', 'loc-model-url')" title="Выбрать файл из бакета S3">
+                📁 Бакет S3
+              </button>
+            </div>
+          </div>
+          <span class="form-hint">Путь к файлу в Yandex Object Storage (например: <code>models/loc1_log_shurale.glb</code>)</span>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-marker-asset">Файл маркера распознавания (AR трекер)</label>
+          <div class="asset-field-wrapper">
+            <div class="asset-preview-box" title="Предпросмотр маркера">
+              <img id="marker-asset-preview" src="/storage/asset/{{ location.marker.asset if location.marker else 'markers/marker_default.png' }}" onerror="this.style.display='none'; document.getElementById('marker-placeholder-icon').style.display='block';">
+              <span id="marker-placeholder-icon" class="placeholder-icon" style="display:none;">🎯</span>
+            </div>
+            <div style="flex:1;">
+              <input type="text" id="loc-marker-asset" class="form-control" value="{{ location.marker.asset if location.marker else 'markers/marker_default.png' }}" oninput="updateAssetPreview('marker-asset-preview', this.value)">
+              <input type="hidden" id="loc-marker-type" value="{{ location.marker.type if location.marker else 'image' }}">
+            </div>
+            <div class="asset-actions">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Загрузить картинку маркера в S3">
+                📤 Загрузить в S3
+                <input type="file" accept="image/*" style="display:none;" onchange="uploadAssetFile(this, 'markers', 'loc-marker-asset', 'marker-asset-preview')">
+              </label>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openS3Browser('markers', 'loc-marker-asset', 'marker-asset-preview')">
+                📁 Бакет S3
+              </button>
+            </div>
+          </div>
+          <div class="asset-preset-chips">
+            <span style="font-size:0.75rem;color:var(--text-muted);align-self:center;">Быстрые маркеры:</span>
+            <button type="button" class="chip-btn" onclick="document.getElementById('loc-marker-asset').value='markers/marker_log.png'; updateAssetPreview('marker-asset-preview', 'markers/marker_log.png');">🪵 Бревно (Шурале)</button>
+            <button type="button" class="chip-btn" onclick="document.getElementById('loc-marker-asset').value='markers/marker_qolsherif.png'; updateAssetPreview('marker-asset-preview', 'markers/marker_qolsherif.png');">🕌 Кул-Шариф</button>
+            <button type="button" class="chip-btn" onclick="document.getElementById('loc-marker-asset').value='markers/marker_monument.png'; updateAssetPreview('marker-asset-preview', 'markers/marker_monument.png');">🏛️ Памятник</button>
+            <button type="button" class="chip-btn" onclick="document.getElementById('loc-marker-asset').value='markers/marker_default.png'; updateAssetPreview('marker-asset-preview', 'markers/marker_default.png');">🎯 Стандартный</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">AR Координаты (X, Y, Z) и Масштаб (Scale)</label>
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:0.5rem;">
+            <input type="number" step="0.01" id="loc-coord-x" class="form-control" placeholder="X" value="{{ location.coordinates.x if location.coordinates else 0.0 }}">
+            <input type="number" step="0.01" id="loc-coord-y" class="form-control" placeholder="Y" value="{{ location.coordinates.y if location.coordinates else 0.0 }}">
+            <input type="number" step="0.01" id="loc-coord-z" class="form-control" placeholder="Z" value="{{ location.coordinates.z if location.coordinates else 0.0 }}">
+            <input type="number" step="0.01" id="loc-coord-scale" class="form-control" placeholder="Scale" value="{{ location.coordinates.scale if location.coordinates else 1.0 }}">
+          </div>
+          <span class="form-hint">Относительное позиционирование AR сцены</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-models-json">Составные подмодели (JSON)</label>
+          <textarea id="loc-models-json" class="form-control" rows="2" style="font-family:monospace;font-size:0.8rem;">{{ location.models | tojson(indent=2) }}</textarea>
+          <span class="form-hint">Список объектов: <code>[{"id": "part1", "name": "Башня", "url": "models/tower.glb", "is_primary": true}]</code></span>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-animations-json">Анимации сцены (JSON)</label>
+          <textarea id="loc-animations-json" class="form-control" rows="2" style="font-family:monospace;font-size:0.8rem;">{{ location.animations | tojson(indent=2) }}</textarea>
+          <span class="form-hint">Список анимаций: <code>[{"id": 0, "name": "idle"}, {"id": 1, "name": "interact"}]</code></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Texts, Lore & AI HITL Assistant -->
+  <div class="section">
+    <div class="section-header">
+      <h3 class="section-title">4. Описания, Лор и AI-генератор (YandexGPT)</h3>
+    </div>
+    <div class="section-body">
+
+      <!-- AI Assistant Box -->
+      <div class="ai-helper-box">
+        <div class="ai-helper-title">
+          <span>✨ AI-Ассистент контента (YandexGPT HITL)</span>
+        </div>
+        <p style="font-size:0.85rem;color:#581c87;margin-bottom:0.75rem;">
+          Сгенерируйте варианты карточек, фольклорных легенд и подсказок по названию точки и контексту темы.
+          Вы можете предварительно просмотреть варианты и в один клик подставить лучший вариант в форму.
+        </p>
+
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:240px;">
+            <label class="form-label" style="color:#581c87;">Контекст или акценты (необязательно)</label>
+            <input type="text" id="ai-theme-input" class="form-control" placeholder="например: золотой гребень, ханские тайны, архитектура 16 века">
+          </div>
+          <div style="width:120px;">
+            <label class="form-label" style="color:#581c87;">Вариантов</label>
+            <select id="ai-variants-count" class="form-control">
+              <option value="2" selected>2 варианта</option>
+              <option value="3">3 варианта</option>
+              <option value="1">1 вариант</option>
+            </select>
+          </div>
+          <button type="button" id="btn-generate-ai" class="btn btn-primary" onclick="generateAiLore()">
+            ✨ Сгенерировать варианты
+          </button>
+        </div>
+
+        <div id="ai-variants-list" class="ai-variants-list"></div>
+      </div>
+
+      <!-- Text Inputs -->
+      <div class="form-grid">
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-text-layer1">Краткое описание (Layer 1) *</label>
+          <textarea id="loc-text-layer1" class="form-control" rows="2" required>{{ location.texts.layer1 if location.texts else '' }}</textarea>
+          <span class="form-hint">Отображается на карточке предпросмотра точки в маршруте</span>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-text-layer2">Развернутый исторический/культурный лор (Layer 2)</label>
+          <textarea id="loc-text-layer2" class="form-control" rows="3">{{ location.texts.layer2 if location.texts else '' }}</textarea>
+          <span class="form-hint">Детальная история, легенды и факты при открытии точки в AR</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-text-action-hint">Подсказка для AR-действия</label>
+          <input type="text" id="loc-text-action-hint" class="form-control" value="{{ location.texts.action_hint if location.texts and location.texts.action_hint else '' }}" placeholder="Наведите камеру на барельеф...">
+          <span class="form-hint">Инструкция пользователю при запуске интерактива</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-text-easter-egg">Пасхалка / Секрет</label>
+          <input type="text" id="loc-text-easter-egg" class="form-control" value="{{ location.texts.easter_egg if location.texts and location.texts.easter_egg else '' }}" placeholder="Тайная легенда...">
+          <span class="form-hint">Открывается при полном выполнении механики</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: Artifact -->
+  <div class="section">
+    <div class="section-header">
+      <h3 class="section-title">5. Награда / Сувенир (Артефакт)</h3>
+    </div>
+    <div class="section-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="loc-artifact-id">ID Артефакта</label>
+          <input type="text" id="loc-artifact-id" class="form-control" value="{{ location.artifact.id if location.artifact else 'art_' ~ location.id }}">
+          <span class="form-hint">Идентификатор в паспорте путешественника</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-artifact-name">Название артефакта</label>
+          <input type="text" id="loc-artifact-name" class="form-control" value="{{ location.artifact.name if location.artifact else location.title }}">
+          <span class="form-hint">Отображается в коллекции пользователя</span>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-artifact-icon">Иконка артефакта / сувенира</label>
+          <div class="asset-field-wrapper">
+            <div class="asset-preview-box" title="Предпросмотр иконки сувенира">
+              <img id="artifact-icon-preview" src="/storage/asset/{{ location.artifact.icon if location.artifact else 'icons/comb.png' }}" onerror="this.style.display='none'; document.getElementById('artifact-placeholder-icon').style.display='block';">
+              <span id="artifact-placeholder-icon" class="placeholder-icon" style="display:none;">🏆</span>
+            </div>
+            <div style="flex:1;">
+              <input type="text" id="loc-artifact-icon" class="form-control" value="{{ location.artifact.icon if location.artifact else 'icons/comb.png' }}" oninput="updateAssetPreview('artifact-icon-preview', this.value)">
+            </div>
+            <div class="asset-actions">
+              <label class="btn btn-secondary btn-sm" style="cursor:pointer;margin:0;" title="Загрузить новую иконку сувенира в S3">
+                📤 Загрузить в S3
+                <input type="file" accept="image/*" style="display:none;" onchange="uploadAssetFile(this, 'icons', 'loc-artifact-icon', 'artifact-icon-preview')">
+              </label>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openS3Browser('icons', 'loc-artifact-icon', 'artifact-icon-preview')">
+                📁 Бакет S3
+              </button>
+            </div>
+          </div>
+
+          <!-- Cultural Kazan Souvenir Presets Palette -->
+          <div style="margin-top:0.65rem;">
+            <div style="font-size:0.75rem;font-weight:600;color:var(--text-muted);margin-bottom:0.35rem;">
+              Культурные сувениры Казани (быстрый выбор):
+            </div>
+            <div class="asset-preset-chips">
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/comb.png', 'Золотой гребень Су анасы')">🪮 Золотой гребень</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/crown.png', 'Казанская шапка (корона)')">👑 Казанская шапка</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/shurale.png', 'Оберег Шурале')">🌲 Оберег Шурале</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/tower.png', 'Свиток Сююмбике')">🏰 Свиток Сююмбике</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/zilant.png', 'Печать дракона Зиланта')">🐉 Печать Зиланта</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/chakchak.png', 'Медовый чак-чак')">🍯 Медовый чак-чак</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/tulip.png', 'Казанский тюльпан')">🌷 Казанский тюльпан</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/coin.png', 'Булгарская монета')">🪙 Булгарская монета</button>
+              <button type="button" class="chip-btn" onclick="selectPresetIcon('icons/cup.png', 'Пиала гостеприимства')">🍵 Пиала дружбы</button>
+            </div>
+          </div>
+          <span class="form-hint" style="margin-top:0.5rem;display:block;">
+            Отображается в паспорте туриста при получении награды. Можно выбрать готовый сувенир или загрузить собственный PNG/SVG файл в S3.
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 6: Next Location Flow -->
+  <div class="section">
+    <div class="section-header">
+      <h3 class="section-title">6. Переход к следующей точке маршрута</h3>
+    </div>
+    <div class="section-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" for="loc-next-id">ID следующей точки</label>
+          <select id="loc-next-id" class="form-control">
+            <option value="">— Финишная точка маршрута (нет следующей) —</option>
+            {% for other in all_locations %}
+              {% if other.id != location.id %}
+                <option value="{{ other.id }}" {% if location.next_location_id == other.id %}selected{% endif %}>
+                  №{{ other.order }} &bull; {{ other.title }} ({{ other.id }})
+                </option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <span class="form-hint">Указывает следующую точку в цепочке квеста</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="loc-next-order">Порядковый номер следующей точки</label>
+          <input type="number" id="loc-next-order" class="form-control" value="{{ location.next_location_order or '' }}" placeholder="например: 2">
+          <span class="form-hint">Дублирует порядковый номер для быстрой навигации</span>
+        </div>
+
+        <div class="form-group full-width">
+          <label class="form-label" for="loc-next-hint">Подсказка навигации к следующей точке</label>
+          <input type="text" id="loc-next-hint" class="form-control" value="{{ location.next_location_hint or '' }}" placeholder="Пройдите 200 метров на восток к Спасской башне...">
+          <span class="form-hint">Текст-подсказка на экране завершения текущей точки</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem;margin-bottom:3rem;">
+    <a href="/admin/quests" class="btn btn-secondary">Отмена</a>
+    <button type="button" class="btn btn-primary" onclick="saveQuest(false)">💾 Сохранить изменения</button>
+  </div>
+
+</form>
+{% endblock %}

@@ -666,8 +666,16 @@ uv sync
 ```powershell
 uv run uvicorn app.main:app --reload --port 8000
 ```
-Интерактивная документация Swagger UI доступна по адресу:
-[http://localhost:8000/docs](http://localhost:8000/docs)
+- **Панель администрирования и редактор квестов (Jinja2 SSR)**:
+  [http://localhost:8000/admin](http://localhost:8000/admin)
+  - `/admin` — Обзор метрик маршрута и статус сервисов
+  - `/admin/quests` — Таблица и управление точками маршрута
+  - `/admin/quests/{id}/edit` — Редактор точки квеста (параметры, лор, 3D, HITL YandexGPT ассистент)
+  - `/admin/quests/new` — Создание новой точки маршрута
+  - `/admin/pois` — Модерация культурных POI и конвертация в квест
+  - `/admin/sync` — Синхронизация с OpenStreetMap Overpass
+- **Интерактивная документация Swagger UI**:
+  [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### Запуск через Docker Compose
 ```powershell

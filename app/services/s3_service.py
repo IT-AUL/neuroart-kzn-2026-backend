@@ -198,5 +198,38 @@ class S3Service:
             logger.error("Failed to delete object from Yandex S3: %s", e)
             raise S3ServiceError(message=str(e))
 
+    async def list_objects(self, prefix: str = "", limit: int = 100):
+        """Lists objects stored in Yandex S3 bucket matching prefix."""
+        if not settings.is_s3_configured:
+            defaults = [
+                {"key": "icons/comb.png", "size": 15420, "url": f"{self.endpoint_url}/{self.bucket_name}/icons/comb.png"},
+                {"key": "icons/shurale.png", "size": 18200, "url": f"{self.endpoint_url}/{self.bucket_name}/icons/shurale.png"},
+                {"key": "icons/chakchak.png", "size": 12100, "url": f"{self.endpoint_url}/{self.bucket_name}/icons/chakchak.png"},
+                {"key": "markers/marker_log.png", "size": 45100, "url": f"{self.endpoint_url}/{self.bucket_name}/markers/marker_log.png"},
+                {"key": "markers/marker_default.png", "size": 38200, "url": f"{self.endpoint_url}/{self.bucket_name}/markers/marker_default.png"},
+                {"key": "models/loc1_log_shurale.glb", "size": 3200000, "url": f"{self.endpoint_url}/{self.bucket_name}/models/loc1_log_shurale.glb"},
+            ]
+            if prefix:
+                return [d for d in defaults if d["key"].startswith(prefix)]
+            return defaults
+
+        try:
+            async with self._get_client_context() as s3:
+                resp = await s3.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix, MaxKeys=limit)
+                contents = resp.get("Contents", [])
+                base_url = settings.YANDEX_S3_PUBLIC_BASE_URL or f"{self.endpoint_url}/{self.bucket_name}"
+                return [
+                    {
+                        "key": item["Key"],
+                        "size": item["Size"],
+                        "last_modified": item["LastModified"].isoformat() if item.get("LastModified") else None,
+                        "url": f"{base_url.rstrip('/')}/{item['Key'].lstrip('/')}",
+                    }
+                    for item in contents
+                ]
+        except Exception as e:
+            logger.error("Failed to list objects from Yandex S3: %s", e)
+            return []
+
 
 s3_service = S3Service()

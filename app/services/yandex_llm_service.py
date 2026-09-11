@@ -49,6 +49,7 @@ class YandexLLMService:
         system_prompt: str,
         user_prompt: str,
         history: Optional[List[ChatMessage]] = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """Calls Yandex Cloud AI Studio OpenAI-compatible chat completions endpoint."""
         messages = [{"role": "system", "content": system_prompt}]
@@ -61,7 +62,7 @@ class YandexLLMService:
             "model": self.model_uri,
             "messages": messages,
             "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
+            "max_tokens": max_tokens or self.max_tokens,
         }
 
         headers = {
@@ -78,7 +79,7 @@ class YandexLLMService:
         last_error = None
         for endpoint in endpoints_to_try:
             try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
+                async with httpx.AsyncClient(timeout=45.0) as client:
                     response = await client.post(endpoint, json=payload, headers=headers)
                     if response.status_code == 200:
                         data = response.json()
@@ -97,6 +98,7 @@ class YandexLLMService:
         system_prompt: str,
         user_prompt: str,
         history: Optional[List[ChatMessage]] = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """Calls standard Yandex Foundation Models completion endpoint."""
         messages = [{"role": "system", "text": system_prompt}]
@@ -110,7 +112,7 @@ class YandexLLMService:
             "completionOptions": {
                 "stream": False,
                 "temperature": self.temperature,
-                "maxTokens": str(self.max_tokens),
+                "maxTokens": str(max_tokens or self.max_tokens),
             },
             "messages": messages,
         }
@@ -311,25 +313,50 @@ class YandexLLMService:
 
         try:
             raw_text = ""
+            needed_tokens = max(2500, 1200 * count)
             is_alice_or_openai = "aliceai" in self.model_uri or "openai" in self.model_uri
             if is_alice_or_openai:
                 raw_text = await self._call_openai_compatible_api(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
+                    max_tokens=needed_tokens,
                 )
             else:
                 raw_text = await self._call_foundation_models_api(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
+                    max_tokens=needed_tokens,
                 )
 
-            # Strip markdown formatting if any
-            cleaned_text = re.sub(r"^```json\s*", "", raw_text.strip(), flags=re.IGNORECASE)
-            cleaned_text = re.sub(r"\s*```$", "", cleaned_text.strip())
+            # Robust JSON extraction from LLM response
+            cleaned_text = raw_text.strip()
+            markdown_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_text, flags=re.IGNORECASE)
+            if markdown_match:
+                cleaned_text = markdown_match.group(1).strip()
+            else:
+                bracket_match = re.search(r"(\[[\s\S]*\]|\{[\s\S]*\})", raw_text)
+                if bracket_match:
+                    cleaned_text = bracket_match.group(1).strip()
 
-            parsed = json.loads(cleaned_text)
-            if isinstance(parsed, list):
-                variants = [LocationContentVariant(**item) for item in parsed]
+            variants: List[LocationContentVariant] = []
+            try:
+                parsed = json.loads(cleaned_text)
+                if isinstance(parsed, dict):
+                    parsed = parsed.get("options") or parsed.get("variants") or [parsed]
+
+                if isinstance(parsed, list):
+                    variants = [LocationContentVariant(**item) for item in parsed if isinstance(item, dict)]
+            except Exception:
+                # If cut off at the end, recover all fully generated JSON objects
+                obj_matches = re.finditer(r'(\{\s*"variant_id"[\s\S]*?\n\s*\})(?=\s*[,\]]|\s*$)', cleaned_text)
+                for m in obj_matches:
+                    try:
+                        item = json.loads(m.group(1))
+                        variants.append(LocationContentVariant(**item))
+                    except Exception:
+                        continue
+
+            if variants:
                 return GenerateLocationContentResponse(
                     title=title,
                     options=variants[:count],
@@ -337,7 +364,7 @@ class YandexLLMService:
                     is_mock=False,
                 )
         except Exception as e:
-            logger.warning("LLM structured generation failed (%s), using intelligent fallback", e)
+            logger.warning("LLM structured generation failed (%s), raw text was: %r", e, raw_text[:300] if 'raw_text' in locals() else '')
 
         # Fallback to rich template mock
         return GenerateLocationContentResponse(

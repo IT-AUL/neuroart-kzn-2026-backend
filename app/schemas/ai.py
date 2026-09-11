@@ -1,5 +1,5 @@
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ChatMessage(BaseModel):
@@ -47,6 +47,12 @@ class GenerateLocationContentResponse(BaseModel):
     options: List[LocationContentVariant]
     model: str
     is_mock: bool = False
+
+    @computed_field
+    @property
+    def variants(self) -> List[LocationContentVariant]:
+        """Alias for options to support diverse frontend consumers."""
+        return self.options
 
 
 class ApproveContentRequest(BaseModel):

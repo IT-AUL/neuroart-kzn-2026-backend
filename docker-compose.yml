@@ -11,5 +11,6 @@ services:
       - .env
     volumes:
       - ./data:/app/data
+      - ./app:/app/app
     environment:
       - DATABASE_URL=sqlite+aiosqlite:///./data/neuroart.db

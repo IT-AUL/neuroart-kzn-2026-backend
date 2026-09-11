@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Панель управления{% endblock %} — NeuroArt KZN 2026</title>
+  <link rel="stylesheet" href="/static/css/admin.css?v=1.1">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <nav class="navbar">
+    <div class="navbar-container">
+      <a href="/admin" class="nav-brand">
+        <span>🕌 NeuroArt KZN</span>
+        <span class="badge">Admin</span>
+      </a>
+
+      <ul class="nav-links">
+        <li><a href="/admin" class="{% if active_tab == 'dashboard' %}active{% endif %}">📊 Обзор</a></li>
+        <li><a href="/admin/quests" class="{% if active_tab == 'quests' %}active{% endif %}">🗺️ Точки квеста</a></li>
+        <li><a href="/admin/pois" class="{% if active_tab == 'pois' %}active{% endif %}">📍 Модерация POI</a></li>
+        <li><a href="/admin/sync" class="{% if active_tab == 'sync' %}active{% endif %}">🔄 OSM Синхронизация</a></li>
+      </ul>
+
+      <div class="nav-extra">
+        <a href="/admin/quests/new" class="btn btn-sm btn-primary">+ Создать квест</a>
+        <a href="/docs" target="_blank" class="btn btn-sm btn-secondary">OpenAPI Docs</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page Content Container -->
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Global Modals -->
+  <div id="modal-delete-confirm" class="modal-overlay">
+    <div class="modal-content">
+      <h3 class="modal-title">Подтверждение удаления</h3>
+      <p>Вы действительно хотите удалить точку маршрута <strong id="delete-loc-title"></strong>?</p>
+      <p style="color:var(--text-muted);font-size:0.8rem;margin-top:0.5rem;">
+        Это действие удалит точку из маршрута и связанные с ней записи прогресса.
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-delete-confirm')">Отмена</button>
+        <button type="button" class="btn btn-danger" onclick="confirmDeleteQuest()">Удалить точку</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 File Picker Modal -->
+  <div id="modal-s3-picker" class="modal-overlay">
+    <div class="modal-content" style="max-width:600px;">
+      <h3 class="modal-title" id="s3-picker-title">Файлы в Yandex S3</h3>
+      <p style="color:var(--text-muted);font-size:0.85rem;">
+        Выберите существующий ассет из облачного хранилища bucket: <code>neuroart-kzn-assets</code>
+      </p>
+      <div id="s3-picker-file-list" class="s3-file-list"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-s3-picker')">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/admin.js?v=1.2"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
