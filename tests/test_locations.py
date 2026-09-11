@@ -68,7 +68,7 @@ async def test_get_sabantuy_location(client: AsyncClient):
     assert params["grace_period_seconds"] == 1.0
     assert params["success_threshold"] == 100
     assert len(data["models"]) == 2
-    assert data["texts"]["easter_egg"] == "ЗАПОЛНИТЬ!!!!"
+    assert data["texts"]["easter_egg"] == "Столб для лазания специально смазывают бараньим салом или мылом, чтобы сделать его почти неприступным, высота 10-15 метров. Традиционным призом наверху был живой петух в клетке или узорные сапоги-ичиги."
     assert data["next_location_id"] == "loc_3_chak_chak"
     assert data["artifact"]["id"] == "polotentse"
 
@@ -85,7 +85,7 @@ async def test_get_chak_chak_location(client: AsyncClient):
     assert data["mechanic"] == "none"
     assert data["mechanic_params"] == {}
     assert len(data["models"]) == 3
-    assert data["texts"]["layer2"] == "ЗАПОЛНИТЬ!!!!"
+    assert data["texts"]["layer2"] == "Чак-чак готовят из крутого яичного теста, скатанного в тонкие жгутики или шарики, обжаривают во фритюре до золотистой корочки и заливают горячим медовым сиропом, после чего складывают горкой на блюде. По примете, чем выше горка, тем больше благополучия ждет семью. Чак-чак включен в список «Вкусы России» как официально признанный гастрономический бренд, а в Казани в Старо-Татарской слободе есть отдельный музей чак-чака."
     assert data["next_location_id"] is None
     assert data["artifact"]["id"] == "chak_chak"
 
