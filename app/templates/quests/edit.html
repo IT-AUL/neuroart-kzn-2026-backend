@@ -3,11 +3,11 @@
 {% block title %}Редактирование точки {{ location.id }}{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="page-header is-sticky">
   <div>
     <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.25rem;">
-      <a href="/admin/quests" style="color:var(--text-muted);text-decoration:none;font-size:0.9rem;">&larr; Назад к списку</a>
-      <span style="color:var(--text-muted);">&bull;</span>
+      <a href="/admin/quests" style="color:var(--text-muted);text-decoration:none;font-size:0.85rem;">&larr; Назад к списку</a>
+      <span style="color:var(--text-faint);">&bull;</span>
       <span class="badge badge-{{ location.priority|lower }}">{{ location.priority }}</span>
       <span class="badge badge-mechanic">{{ location.mechanic }}</span>
     </div>
@@ -15,17 +15,29 @@
     <p class="page-subtitle">ID: <code>{{ location.id }}</code> &bull; Порядок на маршруте: №{{ location.order }}</p>
   </div>
   <div style="display:flex;gap:0.5rem;">
-    <button type="button" class="btn btn-danger" onclick="promptDeleteQuest('{{ location.id }}', '{{ location.title|escape }}')">🗑️ Удалить</button>
-    <button type="button" id="btn-save-quest" class="btn btn-primary" onclick="saveQuest(false)">💾 Сохранить изменения</button>
+    <button type="button" class="btn btn-danger" onclick="promptDeleteQuest('{{ location.id }}', '{{ location.title|escape }}')">Удалить</button>
+    <button type="button" id="btn-save-quest" class="btn btn-primary" onclick="saveQuest(false)">Сохранить изменения</button>
   </div>
 </div>
+
+<nav class="step-nav">
+  <a href="#section-1"><span class="step-num">1</span>Инфо</a>
+  <a href="#section-2"><span class="step-num">2</span>Механика</a>
+  <a href="#section-3"><span class="step-num">3</span>3D и маркер</a>
+  <a href="#section-4"><span class="step-num">4</span>Лор и AI</a>
+  <a href="#section-5"><span class="step-num">5</span>Награда</a>
+  <a href="#section-6"><span class="step-num">6</span>Переход</a>
+</nav>
 
 <form id="quest-form" onsubmit="event.preventDefault(); saveQuest(false);">
 
   <!-- Section 1: General Info -->
-  <div class="section">
+  <div class="section" id="section-1">
     <div class="section-header">
-      <h3 class="section-title">1. Основная информация</h3>
+      <div class="section-header-left">
+        <span class="step-badge">1</span>
+        <h3 class="section-title">Основная информация</h3>
+      </div>
     </div>
     <div class="section-body">
       <div class="form-grid">
@@ -60,9 +72,12 @@
   </div>
 
   <!-- Section 2: Mechanics -->
-  <div class="section">
+  <div class="section" id="section-2">
     <div class="section-header">
-      <h3 class="section-title">2. Игровая механика AR</h3>
+      <div class="section-header-left">
+        <span class="step-badge">2</span>
+        <h3 class="section-title">Игровая механика AR</h3>
+      </div>
     </div>
     <div class="section-body">
       <div class="form-grid">
@@ -90,9 +105,12 @@
   </div>
 
   <!-- Section 3: 3D Assets & Coordinates -->
-  <div class="section">
+  <div class="section" id="section-3">
     <div class="section-header">
-      <h3 class="section-title">3. 3D Модели, Маркер и Координаты</h3>
+      <div class="section-header-left">
+        <span class="step-badge">3</span>
+        <h3 class="section-title">3D Модели, Маркер и Координаты</h3>
+      </div>
     </div>
     <div class="section-body">
       <div class="form-grid">
@@ -172,29 +190,33 @@
   </div>
 
   <!-- Section 4: Texts, Lore & AI HITL Assistant -->
-  <div class="section">
+  <div class="section" id="section-4">
     <div class="section-header">
-      <h3 class="section-title">4. Описания, Лор и AI-генератор (YandexGPT)</h3>
+      <div class="section-header-left">
+        <span class="step-badge">4</span>
+        <h3 class="section-title">Описания, Лор и AI-генератор (YandexGPT)</h3>
+      </div>
     </div>
     <div class="section-body">
 
       <!-- AI Assistant Box -->
       <div class="ai-helper-box">
         <div class="ai-helper-title">
-          <span>✨ AI-Ассистент контента (YandexGPT HITL)</span>
+          <span class="ai-icon">✨</span>
+          <span>AI-Ассистент контента &middot; YandexGPT HITL</span>
         </div>
-        <p style="font-size:0.85rem;color:#581c87;margin-bottom:0.75rem;">
+        <p style="margin-bottom:0.9rem;">
           Сгенерируйте варианты карточек, фольклорных легенд и подсказок по названию точки и контексту темы.
-          Вы можете предварительно просмотреть варианты и в один клик подставить лучший вариант в форму.
+          Просмотрите варианты и в один клик подставьте лучший в форму.
         </p>
 
         <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
           <div style="flex:1;min-width:240px;">
-            <label class="form-label" style="color:#581c87;">Контекст или акценты (необязательно)</label>
+            <label class="form-label" style="color:var(--gold);">Контекст или акценты (необязательно)</label>
             <input type="text" id="ai-theme-input" class="form-control" placeholder="например: золотой гребень, ханские тайны, архитектура 16 века">
           </div>
-          <div style="width:120px;">
-            <label class="form-label" style="color:#581c87;">Вариантов</label>
+          <div style="width:130px;">
+            <label class="form-label" style="color:var(--gold);">Вариантов</label>
             <select id="ai-variants-count" class="form-control">
               <option value="2" selected>2 варианта</option>
               <option value="3">3 варианта</option>
@@ -239,9 +261,12 @@
   </div>
 
   <!-- Section 5: Artifact -->
-  <div class="section">
+  <div class="section" id="section-5">
     <div class="section-header">
-      <h3 class="section-title">5. Награда / Сувенир (Артефакт)</h3>
+      <div class="section-header-left">
+        <span class="step-badge">5</span>
+        <h3 class="section-title">Награда / Сувенир (Артефакт)</h3>
+      </div>
     </div>
     <div class="section-body">
       <div class="form-grid">
@@ -304,9 +329,12 @@
   </div>
 
   <!-- Section 6: Next Location Flow -->
-  <div class="section">
+  <div class="section" id="section-6">
     <div class="section-header">
-      <h3 class="section-title">6. Переход к следующей точке маршрута</h3>
+      <div class="section-header-left">
+        <span class="step-badge">6</span>
+        <h3 class="section-title">Переход к следующей точке маршрута</h3>
+      </div>
     </div>
     <div class="section-body">
       <div class="form-grid">
@@ -342,7 +370,7 @@
 
   <div style="display:flex;justify-content:flex-end;gap:0.75rem;margin-top:1.5rem;margin-bottom:3rem;">
     <a href="/admin/quests" class="btn btn-secondary">Отмена</a>
-    <button type="button" class="btn btn-primary" onclick="saveQuest(false)">💾 Сохранить изменения</button>
+    <button type="button" class="btn btn-primary" onclick="saveQuest(false)">Сохранить изменения</button>
   </div>
 
 </form>

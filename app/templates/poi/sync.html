@@ -10,7 +10,7 @@
   </div>
   <div>
     <button type="button" id="btn-trigger-sync" class="btn btn-primary" onclick="triggerOsmSync()">
-      🔄 Запустить синхронизацию OSM
+      Запустить синхронизацию OSM
     </button>
   </div>
 </div>
@@ -50,7 +50,7 @@
   <div class="section-body">
     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
       {% for cat, count in (sync_status.categories_breakdown or {}).items() %}
-      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:var(--radius);padding:0.5rem 0.85rem;display:flex;align-items:center;gap:0.5rem;">
+      <div style="background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius);padding:0.5rem 0.85rem;display:flex;align-items:center;gap:0.5rem;">
         <span style="font-weight:600;font-size:0.9rem;">{{ cat }}</span>
         <span class="badge badge-secondary">{{ count }}</span>
       </div>
@@ -91,7 +91,7 @@
           <td>{{ log.points_scanned }}</td>
           <td>
             <span style="color:var(--success);font-weight:600;">+{{ log.points_created }}</span> /
-            <span style="color:var(--primary);font-weight:600;">~{{ log.points_updated }}</span>
+            <span style="color:var(--gold);font-weight:600;">~{{ log.points_updated }}</span>
           </td>
         </tr>
         {% else %}

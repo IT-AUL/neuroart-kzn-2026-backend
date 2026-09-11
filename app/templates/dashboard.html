@@ -49,7 +49,7 @@
 <!-- Current Route Points Table -->
 <div class="section">
   <div class="section-header">
-    <h2 class="section-title">🗺️ Активный маршрут ({{ locations|length }} точек)</h2>
+    <h2 class="section-title">Активный маршрут ({{ locations|length }} точек)</h2>
     <a href="/admin/quests" class="btn btn-sm btn-secondary">Полный список &rarr;</a>
   </div>
   <div class="table-container">
@@ -80,7 +80,7 @@
             <span class="badge badge-mechanic">{{ loc.mechanic }}</span>
           </td>
           <td>
-            <code style="font-size:0.75rem;background:#f1f5f9;padding:2px 4px;border-radius:3px;">
+            <code style="font-size:0.75rem;background:var(--bg-subtle);padding:2px 4px;border-radius:3px;">
               {{ loc.model_url or 'нет' }}
             </code>
           </td>

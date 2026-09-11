@@ -15,6 +15,7 @@ from app.services.poi.sync_manager import PoiSyncManager
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+templates.env.policies["json.dumps_kwargs"] = {"ensure_ascii": False}
 
 router = APIRouter(prefix="/admin", tags=["Admin Panel & Quest Editor"])
 

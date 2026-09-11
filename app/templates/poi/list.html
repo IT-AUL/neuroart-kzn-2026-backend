@@ -9,7 +9,7 @@
     <p class="page-subtitle">Проверка объектов, синхронизированных из OpenStreetMap, и преобразование их в активные квесты</p>
   </div>
   <div style="display:flex;gap:0.5rem;">
-    <a href="/admin/sync" class="btn btn-secondary">🔄 Синхронизация OSM</a>
+    <a href="/admin/sync" class="btn btn-secondary">Синхронизация OSM</a>
     <a href="/admin/quests" class="btn btn-primary">К списку квестов &rarr;</a>
   </div>
 </div>
@@ -64,7 +64,7 @@
           </td>
           <td>
             {% for tag in (poi.tags or []) %}
-              <span class="badge" style="background:#f1f5f9;color:#475569;margin-right:2px;font-size:0.7rem;">#{{ tag }}</span>
+              <span class="badge" style="background:var(--bg-subtle);color:var(--text-muted);margin-right:2px;font-size:0.7rem;">#{{ tag }}</span>
             {% else %}
               <span style="color:var(--text-muted);font-size:0.75rem;">нет тегов</span>
             {% endfor %}
