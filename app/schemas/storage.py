@@ -23,3 +23,20 @@ class S3StatusResponse(BaseModel):
     region: str
     accessible: bool
     message: str
+
+
+class S3PresignedUploadRequest(BaseModel):
+    filename: str
+    content_type: str = "model/gltf-binary"
+    key_prefix: str = "models"
+    expires_in_seconds: int = 1800
+
+
+class S3PresignedUploadResponse(BaseModel):
+    key: str
+    upload_url: str
+    public_url: str
+    method: str = "PUT"
+    content_type: str
+    expires_in_seconds: int
+

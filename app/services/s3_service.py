@@ -4,7 +4,12 @@ import aioboto3
 from botocore.exceptions import ClientError
 from app.core.config import settings
 from app.core.exceptions import S3ServiceError
-from app.schemas.storage import S3PresignedUrlResponse, S3StatusResponse, S3UploadResponse
+from app.schemas.storage import (
+    S3PresignedUploadResponse,
+    S3PresignedUrlResponse,
+    S3StatusResponse,
+    S3UploadResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +140,51 @@ class S3Service:
             logger.error("Failed to generate presigned URL for Yandex S3: %s", e)
             raise S3ServiceError(message=str(e))
 
+    async def generate_presigned_upload_url(
+        self,
+        key: str,
+        content_type: str = "application/octet-stream",
+        expires_in_seconds: int = 1800,
+    ) -> S3PresignedUploadResponse:
+        public_url = (
+            f"{settings.YANDEX_S3_PUBLIC_BASE_URL.rstrip('/')}/{key.lstrip('/')}"
+            if settings.YANDEX_S3_PUBLIC_BASE_URL
+            else f"{self.endpoint_url}/{self.bucket_name}/{key}"
+        )
+
+        if not settings.is_s3_configured:
+            mock_upload_url = f"{self.endpoint_url}/{self.bucket_name}/{key}?mock_upload=true"
+            return S3PresignedUploadResponse(
+                key=key,
+                upload_url=mock_upload_url,
+                public_url=public_url,
+                method="PUT",
+                content_type=content_type,
+                expires_in_seconds=expires_in_seconds,
+            )
+
+        try:
+            async with self._get_client_context() as s3:
+                upload_url = await s3.generate_presigned_url(
+                    ClientMethod="put_object",
+                    Params={
+                        "Bucket": self.bucket_name,
+                        "Key": key,
+                        "ContentType": content_type,
+                    },
+                    ExpiresIn=expires_in_seconds,
+                )
+                return S3PresignedUploadResponse(
+                    key=key,
+                    upload_url=upload_url,
+                    public_url=public_url,
+                    method="PUT",
+                    content_type=content_type,
+                    expires_in_seconds=expires_in_seconds,
+                )
+        except Exception as e:
+            logger.error("Failed to generate presigned upload URL for Yandex S3: %s", e)
+            raise S3ServiceError(message=str(e))
 
     async def delete_object(self, key: str) -> bool:
         if not settings.is_s3_configured:

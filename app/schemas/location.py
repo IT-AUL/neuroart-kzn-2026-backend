@@ -90,3 +90,41 @@ class LocationResponse(BaseModel):
     next_location_order: Optional[int] = None
     next_location_hint: Optional[str] = None
 
+
+class LocationCreateRequest(BaseModel):
+    id: str = Field(..., min_length=2, max_length=64, description="Unique slug ID, e.g. 'loc_4_kaban'")
+    order: int = Field(..., ge=1, description="Sequential route order")
+    priority: Literal["P0", "P1", "P2"] = "P1"
+    title: str = Field(..., min_length=2, max_length=255)
+    mechanic: Literal["trace", "tap_climb", "none", "tap_strike", "strike"] = "none"
+    mechanic_params: Dict[str, Any] = Field(default_factory=dict)
+    marker: MarkerSchema = Field(default_factory=lambda: MarkerSchema(type="image", asset="marker_default.png"))
+    model_url: Optional[str] = Field(default="", description="Primary 3D GLB model path or URL")
+    models: List[ModelAssetSchema] = Field(default_factory=list, description="Sub-models in AR scene")
+    coordinates: CoordinatesSchema = Field(default_factory=CoordinatesSchema)
+    animations: List[AnimationSchema] = Field(default_factory=list)
+    texts: TextsSchema
+    artifact: ArtifactSchema
+    next_location_id: Optional[str] = None
+    next_location_order: Optional[int] = None
+    next_location_hint: Optional[str] = None
+
+
+class LocationUpdateRequest(BaseModel):
+    order: Optional[int] = None
+    priority: Optional[Literal["P0", "P1", "P2"]] = None
+    title: Optional[str] = None
+    mechanic: Optional[Literal["trace", "tap_climb", "none", "tap_strike", "strike"]] = None
+    mechanic_params: Optional[Dict[str, Any]] = None
+    marker: Optional[MarkerSchema] = None
+    model_url: Optional[str] = None
+    models: Optional[List[ModelAssetSchema]] = None
+    coordinates: Optional[CoordinatesSchema] = None
+    animations: Optional[List[AnimationSchema]] = None
+    texts: Optional[TextsSchema] = None
+    artifact: Optional[ArtifactSchema] = None
+    next_location_id: Optional[str] = None
+    next_location_order: Optional[int] = None
+    next_location_hint: Optional[str] = None
+
+

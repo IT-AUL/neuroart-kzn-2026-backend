@@ -248,18 +248,19 @@ neuroart-kzn-2026-backend/
 * **Публичные ссылки**: при указании переменной `YANDEX_S3_PUBLIC_BASE_URL` относительные пути `models/...` автоматически преобразуются в прямые публичные ссылки для Three.js / WebGL.
 * **API эндпоинты**:
   * `GET /storage/status` — проверка доступности бакета.
-  * `POST /storage/upload` — загрузка файла (3D-модель, маркер, иконка).
+  * `POST /storage/presign-upload` — генерация подписанной ссылки для прямой загрузки клиентом в S3 (поддержка `onUploadProgress` / прогресс-бара без нагрузки на бэкенд).
+  * `POST /storage/upload` — загрузка файла через сервер (3D-модель, маркер, иконка).
   * `GET /storage/presign/{key}` — генерация временной подписанной ссылки на скачивание.
   * `DELETE /storage/object/{key}` — удаление объекта из бакета.
 
-### 6.2. Yandex LLM (YandexGPT / Alice AI)
-* **Назначение**: виртуальный фольклорный гид по интерактивному маршруту.
-* **Эндпоинт**: `POST /locations/{id}/chat`.
-* **Принцип работы**: бэкенд на лету формирует контекстный системный промпт, загружая в него данные текущей точки (`layer1`, `layer2`, исторический контекст Шурале, Сабантуя или чайных традиций).
+### 6.2. Yandex LLM (YandexGPT / Alice AI) & Редакторский HITL
+* **Назначение**:
+  1. Виртуальный фольклорный гид по интерактивному маршруту (`POST /locations/{id}/chat`).
+  2. **HITL-ассистент контент-редактора** (`POST /locations/editor/generate-content`): генерация вариантов описаний, реплик, подсказок и пасхалок по названию точки с режимом предварительного просмотра, ручной правки и утверждения (`POST /locations/{id}/editor/approve-content`).
 * **Двойная совместимость**:
   * **OpenAI-совместимый HTTP API** (`https://llm.api.cloud.yandex.net/v1/chat/completions`) — для моделей нового поколения, таких как `aliceai-llm-flash`.
   * **Нативный Foundation Models API** (`https://llm.api.cloud.yandex.net/foundationModels/v1/completion`) — для стандартных моделей `yandexgpt/latest`.
-  * **Демо-фоллбэк**: при отсутствии API-ключа сервис отвечает интеллектуальной заглушкой на основе исторических фактов точки.
+  * **Демо-фоллбэк**: при отсутствии API-ключа сервис отвечает интеллектуальной фольклорной заглушкой.
 
 ---
 
@@ -267,76 +268,93 @@ neuroart-kzn-2026-backend/
 
 Все эндпоинты доступны как напрямую от корня (`/locations`), так и с префиксом версии (`/api/v1/locations`).
 
-### 7.1. Точки маршрута
+### 7.1. Точки маршрута и Редактор (CRUD + HITL)
 
 #### `GET /locations`
 Возвращает полный упорядоченный список всех точек маршрута.
-* **Заголовки**: не требуются.
-* **Ответ `200 OK`**:
-```json
-[
-  {
-    "id": "loc_1_shurale",
-    "order": 1,
-    "priority": "P0",
-    "title": "Дровосек-батыр и Шурале",
-    "mechanic": "trace",
-    "mechanic_params": {
-      "path": "заполняет 3D-художник после экспорта модели бревна",
-      "tolerance": 20.0
-    },
-    "marker": { "type": "image", "asset": "marker_log.png" },
-    "model_url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_log_shurale.glb",
-    "models": [
-      {
-        "id": "log_and_wedge",
-        "name": "Бревно с трещиной и клином",
-        "url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_log_shurale.glb",
-        "is_primary": true
-      },
-      {
-        "id": "shurale",
-        "name": "Шурале",
-        "url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_shurale_char.glb",
-        "is_primary": false
-      },
-      {
-        "id": "cart",
-        "name": "Телега дровосека",
-        "url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_cart.glb",
-        "is_primary": false
-      }
-    ],
-    "coordinates": { "x": 0.0, "y": 0.0, "z": 0.0, "scale": 1.0 },
-    "animations": [
-      { "id": 0, "name": "log_idle_crack_closed" },
-      { "id": 1, "name": "log_crack_open" }
-    ],
-    "texts": {
-      "layer1": "Одиночная работа в лесу была по-настоящему опасной...",
-      "layer2": "Поэма «Шурале» Габдуллы Тукая написана в 1907 году...",
-      "action_hint": "Веди пальцем по щели бревна, затем тапни по клину для удара топором",
-      "dialogue": [
-        {
-          "speaker": "Дровосек",
-          "text": "Давай сперва вместе последнее бревно на телегу закинем...",
-          "trigger": "shurale_appear"
-        }
-      ],
-      "easter_egg": "Шутка про имя 'Вгодуминувшем' (Былтыр)..."
-    },
-    "artifact": { "id": "klin", "name": "Клин", "icon": "icons/klin.png" },
-    "next_location_id": "loc_2_sabantuy",
-    "next_location_order": 2,
-    "next_location_hint": "Отправляйтесь на майдан на праздник Сабантуй к столбу с призом"
-  }
-]
-```
+
+#### `POST /locations`
+Создание новой точки маршрута (Редактор).
+* **Тело запроса (`LocationCreateRequest`)**: `id`, `order`, `priority`, `title`, `mechanic`, `mechanic_params`, `marker`, `model_url`, `models`, `coordinates`, `animations`, `texts`, `artifact`, `next_location_*`.
+* **Ответ `201 Created`**: созданный объект точки.
+* **Ответ `409 Conflict`**: если точка с таким `id` уже существует.
 
 #### `GET /locations/{id}`
-Возвращает полную конфигурацию одной точки по ее ID (`loc_1_shurale`, `loc_2_sabantuy`, `loc_3_chak_chak`).
+Возвращает полную конфигурацию одной точки по ее ID.
 * **Ответ `200 OK`**: JSON объект точки.
 * **Ответ `404 Not Found`**: если точка не найдена.
+
+#### `PUT /locations/{id}`
+Обновление существующей точки маршрута (Редактор).
+* **Тело запроса (`LocationUpdateRequest`)**: любые обновляемые поля точки.
+* **Ответ `200 OK`**: обновленный объект точки.
+
+#### `DELETE /locations/{id}`
+Удаление точки маршрута и связанных записей прогресса.
+* **Ответ `200 OK`**: `{"status": "deleted", "id": "..."}`.
+
+#### `POST /locations/editor/generate-content`
+**HITL Генерация контента**: принимает название точки и тему, возвращает несколько готовых вариантов описаний (`layer1`, `layer2`, `action_hint`, `dialogue`, `easter_egg`, `artifact_suggestion`).
+* **Тело запроса**:
+```json
+{
+  "title": "Озеро Кабан и водяная Су анасы",
+  "context_or_theme": "золотой гребень, духи воды",
+  "variant_count": 2
+}
+```
+* **Ответ `200 OK`**:
+```json
+{
+  "title": "Озеро Кабан и водяная Су анасы",
+  "options": [
+    {
+      "variant_id": "variant_1_classic",
+      "layer1": "Озеро Кабан — легендарная водная система в центре Казани...",
+      "layer2": "По преданиям, на дне озера сокрыты ханские сокровища...",
+      "action_hint": "Проведите пальцем по контуру золотого гребня...",
+      "dialogue": [
+        { "speaker": "Су анасы", "text": "Кто потревожил покой вод?", "trigger": "enter" }
+      ],
+      "easter_egg": "Легенда о золотом гребне...",
+      "artifact_suggestion": { "id": "comb", "name": "Золотой гребень", "icon": "icons/comb.png" }
+    }
+  ],
+  "model": "gpt://.../aliceai-llm-flash/latest",
+  "is_mock": false
+}
+```
+
+#### `POST /locations/{id}/editor/approve-content`
+**HITL Аппрув-режим**: утверждение выбранного/отредактированного человеком варианта и сохранение в базу данных точки.
+* **Тело запроса (`ApproveContentRequest`)**: `variant_id`, опциональные отредактированные поля `layer1`, `layer2`, `action_hint`, `dialogue`, `easter_egg`, `artifact_name`.
+* **Ответ `200 OK`**: обновлённый объект локации.
+
+#### `POST /storage/presign-upload`
+Генерация пред-подписанной ссылки для **прямой загрузки файлов клиентом в S3 (Direct Upload)** с поддержкой прогресс-бара.
+* **Тело запроса**:
+```json
+{
+  "filename": "model_su_anasy.glb",
+  "content_type": "model/gltf-binary",
+  "key_prefix": "models"
+}
+```
+* **Ответ `200 OK`**:
+```json
+{
+  "key": "models/model_su_anasy.glb",
+  "upload_url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/model_su_anasy.glb?X-Amz-Signature=...",
+  "public_url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/model_su_anasy.glb",
+  "method": "PUT",
+  "content_type": "model/gltf-binary",
+  "expires_in_seconds": 1800
+}
+```
+*(Клиент отправляет файл методом `PUT` на `upload_url` и отслеживает событие `onUploadProgress` для отображения прогресс-бара).*
+
+---
+
 
 ---
 

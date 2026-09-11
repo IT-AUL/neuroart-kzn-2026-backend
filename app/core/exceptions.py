@@ -9,6 +9,15 @@ class LocationNotFoundError(HTTPException):
         )
 
 
+class LocationAlreadyExistsError(HTTPException):
+    def __init__(self, location_id: str):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Location with id '{location_id}' already exists",
+        )
+
+
+
 class SessionHeaderMissingError(HTTPException):
     def __init__(self):
         super().__init__(

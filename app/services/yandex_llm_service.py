@@ -1,10 +1,17 @@
+import json
 import logging
+import re
 from typing import List, Optional
 import httpx
 from app.core.config import settings
 from app.core.exceptions import LLMServiceError
 from app.db.models.location import Location
-from app.schemas.ai import AIChatResponse, ChatMessage
+from app.schemas.ai import (
+    AIChatResponse,
+    ChatMessage,
+    GenerateLocationContentResponse,
+    LocationContentVariant,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -191,5 +198,155 @@ class YandexLLMService:
             is_mock=False,
         )
 
+    def _get_mock_variants(
+        self,
+        title: str,
+        context: Optional[str],
+        count: int,
+    ) -> List[LocationContentVariant]:
+        theme = context or "татарская легенда и городская традиция Казани"
+        variants: List[LocationContentVariant] = []
+
+        v1 = LocationContentVariant(
+            variant_id="variant_1_classic",
+            layer1=f"Историческое место Казани, посвящённое теме «{title}»: вековые традиции, ремесло и гостеприимство.",
+            layer2=f"С этим уголком связана старинная легенда: {theme}. Предания гласят, что здесь переплетаются духи природы и мудрость древних батыров.",
+            action_hint=f"Исследуйте интерактивную AR-сцену «{title}» и проведите пальцем по контуру главного символа.",
+            dialogue=[
+                {
+                    "speaker": "Старец-сказитель",
+                    "text": f"Добро пожаловать к «{title}»! Вглядись в детали этой сказки.",
+                    "trigger": "enter",
+                },
+                {
+                    "speaker": "Герой",
+                    "text": "Где сила не справится, там народная мудрость выручит!",
+                    "trigger": "complete",
+                },
+            ],
+            easter_egg=f"Старинная пословица: всякий путник на казанской земле обретает силу, если уважает традиции предков.",
+            artifact_suggestion={
+                "id": "relic_symbol",
+                "name": f"Символ: {title[:20]}",
+                "icon": "icons/symbol.png",
+            },
+        )
+        variants.append(v1)
+
+        if count > 1:
+            v2 = LocationContentVariant(
+                variant_id="variant_2_mythological",
+                layer1=f"Оживлённый фольклорный образ Казани вокруг сюжета «{title}», знакомый каждому с детства.",
+                layer2=f"В народных преданиях здесь обитают загадочные лесные и водные духи. Главный мотив — испытание на честность и доброе сердце.",
+                action_hint=f"Тапните по ключевому объекту сцены, чтобы разгадать загадку локации.",
+                dialogue=[
+                    {
+                        "speaker": "Хранитель места",
+                        "text": f"Испытай свою удачу и сноровку на точке «{title}»!",
+                        "trigger": "start",
+                    }
+                ],
+                easter_egg="Шуточный секрет: если улыбнуться и трижды коснуться маркера, духи помогут в пути.",
+                artifact_suggestion={
+                    "id": "talisman_amulet",
+                    "name": "Оберег батыра",
+                    "icon": "icons/amulet.png",
+                },
+            )
+            variants.append(v2)
+
+        if count > 2:
+            v3 = LocationContentVariant(
+                variant_id="variant_3_interactive",
+                layer1=f"Культурный символ Казани, где каждый камень и поворот хранит тепло татарского гостеприимства.",
+                layer2=f"Здесь воспевается трудолюбие и единство народа: от праздников Сабантуя до тихих вечеров за самоваром.",
+                action_hint=f"Соберите коллекционный сувенир, выполнив быстрое действие на экране.",
+                dialogue=[
+                    {
+                        "speaker": "Хозяин майдана",
+                        "text": "Рәхим итегез! Гостям всегда рады на нашей земле!",
+                        "trigger": "start",
+                    }
+                ],
+                easter_egg="Народная мудрость: сытый гость — радость в доме, а весёлый путник — добрый знак.",
+                artifact_suggestion={
+                    "id": "gift_chak",
+                    "name": "Праздничный подарок",
+                    "icon": "icons/gift.png",
+                },
+            )
+            variants.append(v3)
+
+        return variants[:count]
+
+    async def generate_location_variants(
+        self,
+        title: str,
+        context: Optional[str] = None,
+        count: int = 2,
+    ) -> GenerateLocationContentResponse:
+        if not settings.is_gpt_configured:
+            return GenerateLocationContentResponse(
+                title=title,
+                options=self._get_mock_variants(title, context, count),
+                model="yandexgpt-demo-fallback",
+                is_mock=True,
+            )
+
+        system_prompt = (
+            "Ты — фольклорист и креативный сценарист интерактивного туристического AR-квеста по Казани «NeuroArt KZN 2026».\n"
+            f"Создай ровно {count} разных вариантов текстов для точки маршрута в строгом формате JSON.\n"
+            "Каждый вариант должен содержать следующие поля:\n"
+            "- variant_id: уникальная строка (например 'variant_1')\n"
+            "- layer1: бытовой / прикладной факт (1-2 предложения)\n"
+            "- layer2: историко-культурный или мифологический контекст (2-3 предложения)\n"
+            "- action_hint: инструкция игроку, что делать в AR-сцене\n"
+            "- dialogue: список объектов [{'speaker': '...', 'text': '...', 'trigger': '...'}]\n"
+            "- easter_egg: фольклорная шутка, пословица или пасхалка\n"
+            "- artifact_suggestion: объект {'id': '...', 'name': '...', 'icon': 'icons/...'}\n\n"
+            "Ответ должен быть ТОЛЬКО валидным JSON-массивом из объектов, без обертки в markdown ```json."
+        )
+
+        user_prompt = f"Название точки: «{title}».\nКонтекст/тема: {context or 'фольклор и традиции Казани'}."
+
+        try:
+            raw_text = ""
+            is_alice_or_openai = "aliceai" in self.model_uri or "openai" in self.model_uri
+            if is_alice_or_openai:
+                raw_text = await self._call_openai_compatible_api(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                )
+            else:
+                raw_text = await self._call_foundation_models_api(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                )
+
+            # Strip markdown formatting if any
+            cleaned_text = re.sub(r"^```json\s*", "", raw_text.strip(), flags=re.IGNORECASE)
+            cleaned_text = re.sub(r"\s*```$", "", cleaned_text.strip())
+
+            parsed = json.loads(cleaned_text)
+            if isinstance(parsed, list):
+                variants = [LocationContentVariant(**item) for item in parsed]
+                return GenerateLocationContentResponse(
+                    title=title,
+                    options=variants[:count],
+                    model=self.model_uri,
+                    is_mock=False,
+                )
+        except Exception as e:
+            logger.warning("LLM structured generation failed (%s), using intelligent fallback", e)
+
+        # Fallback to rich template mock
+        return GenerateLocationContentResponse(
+            title=title,
+            options=self._get_mock_variants(title, context, count),
+            model="yandexgpt-fallback-template",
+            is_mock=True,
+        )
+
 
 yandex_llm_service = YandexLLMService()
+

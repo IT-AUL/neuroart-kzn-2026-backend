@@ -1,5 +1,11 @@
 from fastapi import APIRouter, File, Form, Query, UploadFile
-from app.schemas.storage import S3PresignedUrlResponse, S3StatusResponse, S3UploadResponse
+from app.schemas.storage import (
+    S3PresignedUploadRequest,
+    S3PresignedUploadResponse,
+    S3PresignedUrlResponse,
+    S3StatusResponse,
+    S3UploadResponse,
+)
 from app.services.s3_service import s3_service
 
 router = APIRouter(prefix="/storage", tags=["Yandex Object Storage (S3)"])
@@ -15,6 +21,27 @@ async def get_storage_status() -> S3StatusResponse:
 
 
 @router.post(
+    "/presign-upload",
+    response_model=S3PresignedUploadResponse,
+    summary="Generate presigned upload URL for direct client S3 upload with progress bar",
+    description=(
+        "Generates a pre-signed PUT URL directly to Yandex Object Storage. "
+        "Allows frontend/editor UI to upload large 3D models or textures directly to S3 "
+        "using XMLHttpRequest / axios with native onUploadProgress bar, bypassing the backend server."
+    ),
+)
+async def get_presigned_upload_url(
+    payload: S3PresignedUploadRequest,
+) -> S3PresignedUploadResponse:
+    key = f"{payload.key_prefix.strip('/')}/{payload.filename}"
+    return await s3_service.generate_presigned_upload_url(
+        key=key,
+        content_type=payload.content_type,
+        expires_in_seconds=payload.expires_in_seconds,
+    )
+
+
+@router.post(
     "/upload",
     response_model=S3UploadResponse,
     summary="Upload an asset file (3D model, marker image, icon) to Yandex S3",
@@ -23,6 +50,7 @@ async def upload_asset(
     file: UploadFile = File(...),
     key_prefix: str = Form("assets", description="Prefix or folder in bucket"),
 ) -> S3UploadResponse:
+
     content = await file.read()
     key = f"{key_prefix.strip('/')}/{file.filename}"
     content_type = file.content_type or "application/octet-stream"
