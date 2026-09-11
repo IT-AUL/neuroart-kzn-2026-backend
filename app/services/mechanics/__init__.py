@@ -2,11 +2,14 @@ from typing import Dict
 from app.services.mechanics.base import BaseMechanicValidator, MechanicValidationResult
 from app.services.mechanics.none_mechanic import NoneMechanicValidator
 from app.services.mechanics.tap_climb import TapClimbMechanicValidator
+from app.services.mechanics.tap_strike import TapStrikeMechanicValidator
 from app.services.mechanics.trace import TraceMechanicValidator
 
 VALIDATORS: Dict[str, BaseMechanicValidator] = {
     "trace": TraceMechanicValidator(),
     "tap_climb": TapClimbMechanicValidator(),
+    "tap_strike": TapStrikeMechanicValidator(),
+    "strike": TapStrikeMechanicValidator(),
     "none": NoneMechanicValidator(),
 }
 
@@ -21,6 +24,8 @@ __all__ = [
     "MechanicValidationResult",
     "TraceMechanicValidator",
     "TapClimbMechanicValidator",
+    "TapStrikeMechanicValidator",
     "NoneMechanicValidator",
     "get_mechanic_validator",
 ]
+

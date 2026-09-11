@@ -20,14 +20,27 @@ class LocationService:
             return f"{base}/{clean_url}"
         return model_url
 
+    def _enrich_location_models(self, loc: Location) -> None:
+        """Resolve primary model_url and all sub-model URLs."""
+        loc.model_url = self._resolve_model_url(loc.model_url)
+        if loc.models and isinstance(loc.models, list):
+            enriched_models = []
+            for item in loc.models:
+                if isinstance(item, dict) and "url" in item:
+                    item_copy = dict(item)
+                    item_copy["url"] = self._resolve_model_url(item_copy["url"])
+                    enriched_models.append(item_copy)
+                else:
+                    enriched_models.append(item)
+            loc.models = enriched_models
+
     async def get_all_locations(self) -> List[Location]:
         stmt = select(Location).order_by(Location.order.asc())
         result = await self.session.execute(stmt)
         locations = list(result.scalars().all())
 
-        # Optionally enrich model_url if public base is set
         for loc in locations:
-            loc.model_url = self._resolve_model_url(loc.model_url)
+            self._enrich_location_models(loc)
         return locations
 
     async def get_location_by_id(self, location_id: str) -> Location:
@@ -38,5 +51,6 @@ class LocationService:
         if not location:
             raise LocationNotFoundError(location_id=location_id)
 
-        location.model_url = self._resolve_model_url(location.model_url)
+        self._enrich_location_models(location)
         return location
+

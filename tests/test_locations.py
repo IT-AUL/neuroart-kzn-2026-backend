@@ -34,10 +34,19 @@ async def test_get_shurale_location(client: AsyncClient):
     assert "заполняет 3D-художник" in data["mechanic_params"]["path"]
     assert data["marker"] == {"type": "image", "asset": "marker_log.png"}
     assert data["model_url"].endswith("models/loc1_log_shurale.glb")
+    assert len(data["models"]) == 3
+    assert data["models"][0]["id"] == "log_and_wedge"
+    assert data["models"][0]["is_primary"] is True
     assert data["coordinates"] == {"x": 0.0, "y": 0.0, "z": 0.0, "scale": 1.0}
     assert len(data["animations"]) == 8
     assert data["animations"][0] == {"id": 0, "name": "log_idle_crack_closed"}
     assert "Тукая" in data["texts"]["layer2"]
+    assert "пальцем по щели" in data["texts"]["action_hint"]
+    assert len(data["texts"]["dialogue"]) >= 1
+    assert "Вгодуминувшем" in data["texts"]["easter_egg"]
+    assert data["next_location_id"] == "loc_2_sabantuy"
+    assert data["next_location_order"] == 2
+    assert "Сабантуй" in data["next_location_hint"]
     assert data["artifact"] == {"id": "klin", "name": "Клин", "icon": "icons/klin.png"}
 
 
@@ -56,7 +65,11 @@ async def test_get_sabantuy_location(client: AsyncClient):
     assert params["gain_per_tap"] == 4
     assert params["decay_per_interval"] == 1
     assert params["decay_interval_seconds"] == 0.3
+    assert params["grace_period_seconds"] == 1.0
     assert params["success_threshold"] == 100
+    assert len(data["models"]) == 2
+    assert data["texts"]["easter_egg"] == "ЗАПОЛНИТЬ!!!!"
+    assert data["next_location_id"] == "loc_3_chak_chak"
     assert data["artifact"]["id"] == "polotentse"
 
 
@@ -71,7 +84,11 @@ async def test_get_chak_chak_location(client: AsyncClient):
     assert data["priority"] == "P2"
     assert data["mechanic"] == "none"
     assert data["mechanic_params"] == {}
+    assert len(data["models"]) == 3
+    assert data["texts"]["layer2"] == "ЗАПОЛНИТЬ!!!!"
+    assert data["next_location_id"] is None
     assert data["artifact"]["id"] == "chak_chak"
+
 
 
 @pytest.mark.asyncio

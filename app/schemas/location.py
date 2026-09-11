@@ -19,9 +19,25 @@ class AnimationSchema(BaseModel):
     name: str
 
 
+class ModelAssetSchema(BaseModel):
+    id: str
+    name: str
+    url: str
+    is_primary: bool = False
+
+
+class DialogueReplicaSchema(BaseModel):
+    speaker: str
+    text: str
+    trigger: Optional[str] = None
+
+
 class TextsSchema(BaseModel):
     layer1: str
     layer2: str = ""
+    action_hint: Optional[str] = None
+    dialogue: Optional[List[DialogueReplicaSchema]] = None
+    easter_egg: Optional[str] = None
 
 
 class ArtifactSchema(BaseModel):
@@ -50,6 +66,7 @@ class TapClimbParamsSchema(BaseModel):
     gain_per_tap: float = Field(4.0, description="Progress gained per tap")
     decay_per_interval: float = Field(1.0, description="Progress decay per tick")
     decay_interval_seconds: float = Field(0.3, description="Interval in seconds for decay tick")
+    grace_period_seconds: float = Field(1.0, description="Pause buffer before decay begins")
     success_threshold: float = Field(100.0, description="Threshold to win the mechanic and grab prize")
 
 
@@ -60,11 +77,16 @@ class LocationResponse(BaseModel):
     order: int
     priority: Literal["P0", "P1", "P2"]
     title: str
-    mechanic: Literal["trace", "tap_climb", "none"]
+    mechanic: Literal["trace", "tap_climb", "none", "tap_strike", "strike"]
     mechanic_params: Dict[str, Any]
     marker: MarkerSchema
     model_url: str
+    models: List[ModelAssetSchema] = Field(default_factory=list)
     coordinates: CoordinatesSchema
     animations: List[AnimationSchema]
     texts: TextsSchema
     artifact: ArtifactSchema
+    next_location_id: Optional[str] = None
+    next_location_order: Optional[int] = None
+    next_location_hint: Optional[str] = None
+

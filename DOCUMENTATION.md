@@ -81,14 +81,18 @@ neuroart-kzn-2026-backend/
 | `order` | `integer` | Порядковый номер точки в маршруте (1, 2, 3...) |
 | `priority` | `string` | Приоритет точки (`P0`, `P1`, `P2`) |
 | `title` | `string` | Название точки |
-| `mechanic` | `string` | Тип механики: `trace`, `tap_climb` или `none` |
-| `mechanic_params` | `object` | Параметры под конкретный тип механики (структура описана ниже) |
+| `mechanic` | `string` | Тип механики: `trace`, `tap_climb`, `tap_strike`, `none` |
+| `mechanic_params` | `object` | Параметры механики (`path`, `tolerance`, `gain_per_tap`, `decay_interval_seconds`, `grace_period_seconds`, `success_threshold`) |
 | `marker` | `object` | Тип маркера и имя файла ассета (`{ "type": "image", "asset": "marker_log.png" }`) |
-| `model_url` | `string` | Путь или публичная ссылка на 3D-модель сцены (`.glb`) |
+| `model_url` | `string` | Основная 3D-модель сцены (`.glb`) для обратной совместимости |
+| `models` | `array` | Список всех 3D-моделей сцены: `id`, `name`, `url`, `is_primary` |
 | `coordinates` | `object` | Позиция и масштаб модели относительно маркера (`x`, `y`, `z`, `scale`) |
 | `animations` | `array` | Список анимаций сцены: числовой `id` и строковое `name` |
-| `texts` | `object` | Тексты фактов: `layer1` (бытовой факт), `layer2` (исторический слой по тапу) |
+| `texts` | `object` | Тексты и диалоги: `layer1`, `layer2`, `action_hint`, `dialogue`, `easter_egg` |
 | `artifact` | `object` | Трофей для паспорта: `id`, `name`, `icon` (путь к иконке) |
+| `next_location_id` | `string?` | ID следующей точки маршрута (или `null` для финала) |
+| `next_location_order` | `integer?` | Порядковый номер следующей точки (или `null` для финала) |
+| `next_location_hint` | `string?` | Подсказка игроку, куда двигаться дальше по маршруту |
 
 ---
 
@@ -98,12 +102,15 @@ neuroart-kzn-2026-backend/
 
 ### Точка 1: «Дровосек-батыр и Шурале» (`loc_1_shurale`)
 * **Порядок / Приоритет**: `1` / `P0`
-* **Механика**: `trace`
+* **Механика**: `trace` (поддерживает телеметрию `hit_wedge: true` / `strike_performed: true`)
 * **Параметры механики**:
   * `path`: контур для обводки пальцем (нормализованные координаты 0-1, либо плейсхолдер от 3D-художника).
   * `tolerance`: `20` (допустимое отклонение пальца от линии в пикселях).
 * **Маркер**: `{"type": "image", "asset": "marker_log.png"}`
-* **3D-модель**: `models/loc1_log_shurale.glb`
+* **3D-модели (`models`)**:
+  * `log_and_wedge` (основная, `is_primary: true`): `models/loc1_log_shurale.glb`
+  * `shurale`: `models/loc1_shurale_char.glb`
+  * `cart`: `models/loc1_cart.glb`
 * **Координаты**: `{ "x": 0.0, "y": 0.0, "z": 0.0, "scale": 1.0 }`
 * **Анимации** (8 состояний):
   0. `log_idle_crack_closed`
@@ -116,7 +123,11 @@ neuroart-kzn-2026-backend/
   7. `shurale_calls_for_help`
 * **Тексты**:
   * `layer1`: «Одиночная работа в лесу была по-настоящему опасной, ценились смелость и смекалка.»
-  * `layer2`: История поэмы Габдуллы Тукая (1907 г.), балета Фарида Яруллина, памятника у театра Камала и шутки про имя «Вгодуминувшем».
+  * `layer2`: История поэмы Габдуллы Тукая (1907 г.), балета Фарида Яруллина, памятника у театра Камала.
+  * `action_hint`: «Веди пальцем по щели бревна, затем тапни по клину для удара топором»
+  * `dialogue`: реплики дровосека («Давай сперва вместе последнее бревно на телегу закинем...», «Где сила не может, там ум поможет»).
+  * `easter_egg`: Шутка про имя «Вгодуминувшем» (Былтыр).
+* **Навигация**: `next_location_id: "loc_2_sabantuy"`, `next_location_hint`: «Отправляйтесь на майдан на праздник Сабантуй к столбу с призом».
 * **Артефакт**: `{ "id": "klin", "name": "Клин", "icon": "icons/klin.png" }`
 
 ---
@@ -128,9 +139,12 @@ neuroart-kzn-2026-backend/
   * `gain_per_tap`: `4.0` (прирост высоты за один тап).
   * `decay_per_interval`: `1.0` (соскальзывание вниз на 1 балл).
   * `decay_interval_seconds`: `0.3` (интервал соскальзывания — каждые 0.3 секунды).
+  * `grace_period_seconds`: `1.0` (буфер паузы — соскальзывание включается только при паузе > 1 секунды).
   * `success_threshold`: `100.0` (порог победы, верхушка столба).
 * **Маркер**: `{"type": "image", "asset": "marker_pole.png"}`
-* **3D-модель**: `models/loc2_pole_climber.glb`
+* **3D-модели (`models`)**:
+  * `pole_and_towel` (основная, `is_primary: true`): `models/loc2_pole_climber.glb`
+  * `climber`: `models/loc2_climber_char.glb`
 * **Координаты**: `{ "x": 0.0, "y": 0.0, "z": 0.0, "scale": 1.0 }`
 * **Анимации** (4 состояния):
   0. `climber_idle_base`
@@ -140,6 +154,10 @@ neuroart-kzn-2026-backend/
 * **Тексты**:
   * `layer1`: «Сабантуй, праздник плуга, отмечает конец весеннего сева, один из главных праздников у татар и башкир.»
   * `layer2`: Традиции борьбы курэш, приз — живой баран, бег с ложкой и яйцом, разбивание горшка.
+  * `action_hint`: «Лезь наверх, тапай часто, иначе соскользнешь! При паузе больше 1 секунды сползешь вниз.»
+  * `dialogue`: реплика ведущего майдана.
+  * `easter_egg`: `ЗАПОЛНИТЬ!!!!`
+* **Навигация**: `next_location_id: "loc_3_chak_chak"`, `next_location_hint`: «Загляните на праздничное чаепитие во дворе и угоститесь чак-чаком».
 * **Артефакт**: `{ "id": "polotentse", "name": "Полотенце", "icon": "icons/polotentse.png" }`
 
 ---
@@ -147,17 +165,25 @@ neuroart-kzn-2026-backend/
 ### Точка 3: «Чаепитие и чак-чак» (`loc_3_chak_chak`)
 * **Порядок / Приоритет**: `3` / `P2`
 * **Механика**: `none`
-* **Параметры механики**: `{}` (пустой объект). Прогресс не требует выполнения мини-игры — артефакт падает по первому тапу на объект сцены (самовар).
+* **Параметры механики**: `{}` (пустой объект).
 * **Маркер**: `{"type": "image", "asset": "marker_table.png"}`
-* **3D-модель**: `models/loc3_table_samovar.glb`
+* **3D-модели (`models`)**:
+  * `table_samovar` (основная, `is_primary: true`): `models/loc3_table_samovar.glb`
+  * `chak_chak`: `models/loc3_chak_chak_dish.glb`
+  * `cups`: `models/loc3_cups.glb`
 * **Координаты**: `{ "x": 0.0, "y": 0.0, "z": 0.0, "scale": 1.0 }`
 * **Анимации** (2 состояния):
   0. `samovar_steam_loop`
   1. `cup_fill`
 * **Тексты**:
   * `layer1`: «Чак-чак как обязательное угощение на Сабантуе и главный символ татарского гостеприимства.»
-  * `layer2`: `""`
+  * `layer2`: `ЗАПОЛНИТЬ!!!!`
+  * `action_hint`: «Здесь можно просто отдохнуть с дороги. Тапните по чак-чаку, чтобы положить угощение в альбом.»
+  * `dialogue`: реплика хозяйки стола.
+  * `easter_egg`: `ЗАПОЛНИТЬ!!!!`
+* **Навигация**: `next_location_id: null`, `next_location_hint`: «Поздравляем! Демо-маршрут завершен. Откройте экран альбома, чтобы увидеть собранные награды!».
 * **Артефакт**: `{ "id": "chak_chak", "name": "Чак-чак", "icon": "icons/chak_chak.png" }`
+
 
 ---
 
@@ -261,6 +287,26 @@ neuroart-kzn-2026-backend/
     },
     "marker": { "type": "image", "asset": "marker_log.png" },
     "model_url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_log_shurale.glb",
+    "models": [
+      {
+        "id": "log_and_wedge",
+        "name": "Бревно с трещиной и клином",
+        "url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_log_shurale.glb",
+        "is_primary": true
+      },
+      {
+        "id": "shurale",
+        "name": "Шурале",
+        "url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_shurale_char.glb",
+        "is_primary": false
+      },
+      {
+        "id": "cart",
+        "name": "Телега дровосека",
+        "url": "https://storage.yandexcloud.net/neuroart-kzn-assets/models/loc1_cart.glb",
+        "is_primary": false
+      }
+    ],
     "coordinates": { "x": 0.0, "y": 0.0, "z": 0.0, "scale": 1.0 },
     "animations": [
       { "id": 0, "name": "log_idle_crack_closed" },
@@ -268,9 +314,21 @@ neuroart-kzn-2026-backend/
     ],
     "texts": {
       "layer1": "Одиночная работа в лесу была по-настоящему опасной...",
-      "layer2": "Поэма «Шурале» Габдуллы Тукая написана в 1907 году..."
+      "layer2": "Поэма «Шурале» Габдуллы Тукая написана в 1907 году...",
+      "action_hint": "Веди пальцем по щели бревна, затем тапни по клину для удара топором",
+      "dialogue": [
+        {
+          "speaker": "Дровосек",
+          "text": "Давай сперва вместе последнее бревно на телегу закинем...",
+          "trigger": "shurale_appear"
+        }
+      ],
+      "easter_egg": "Шутка про имя 'Вгодуминувшем' (Былтыр)..."
     },
-    "artifact": { "id": "klin", "name": "Клин", "icon": "icons/klin.png" }
+    "artifact": { "id": "klin", "name": "Клин", "icon": "icons/klin.png" },
+    "next_location_id": "loc_2_sabantuy",
+    "next_location_order": 2,
+    "next_location_hint": "Отправляйтесь на майдан на праздник Сабантуй к столбу с призом"
   }
 ]
 ```

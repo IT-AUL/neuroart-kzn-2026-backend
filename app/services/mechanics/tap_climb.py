@@ -22,6 +22,7 @@ class TapClimbMechanicValidator(BaseMechanicValidator):
         gain_per_tap = float(mechanic_params.get("gain_per_tap", 4.0))
         decay_per_interval = float(mechanic_params.get("decay_per_interval", 1.0))
         decay_interval = float(mechanic_params.get("decay_interval_seconds", 0.3))
+        grace_period = float(mechanic_params.get("grace_period_seconds", 1.0))
         threshold = float(mechanic_params.get("success_threshold", 100.0))
 
         if not submission_data:
@@ -55,8 +56,10 @@ class TapClimbMechanicValidator(BaseMechanicValidator):
 
             for t in sorted_times:
                 elapsed = max(0.0, t - last_time)
-                decay_ticks = elapsed / decay_interval
-                current_score = max(0.0, current_score - (decay_ticks * decay_per_interval))
+                # Player only starts slipping if idle time exceeds grace_period
+                if elapsed > grace_period:
+                    decay_ticks = (elapsed - grace_period) / decay_interval
+                    current_score = max(0.0, current_score - (decay_ticks * decay_per_interval))
                 current_score += gain_per_tap
                 if current_score > peak_score:
                     peak_score = current_score
@@ -77,6 +80,7 @@ class TapClimbMechanicValidator(BaseMechanicValidator):
                     "duration_seconds": round(sorted_times[-1] - sorted_times[0], 2) if len(sorted_times) > 1 else 0.0,
                     "peak_score": round(peak_score, 2),
                     "final_score": round(current_score, 2),
+                    "grace_period_seconds": grace_period,
                 },
             )
 
@@ -90,12 +94,16 @@ class TapClimbMechanicValidator(BaseMechanicValidator):
 
             total_gain = taps * gain_per_tap
             decay_rate_per_sec = decay_per_interval / decay_interval
-            total_decay = duration * decay_rate_per_sec
-            effective_score = max(0.0, total_gain - total_decay)
 
-            # Minimum tapping frequency needed to beat decay:
-            # required_taps_per_sec = decay_rate_per_sec / gain_per_tap = 3.333 / 4 = 0.833 taps/sec
-            reached = effective_score >= threshold or (total_gain >= threshold and (taps / duration) > (decay_rate_per_sec / gain_per_tap))
+            avg_interval = duration / max(1, taps)
+            if avg_interval > grace_period:
+                unbuffered_decay_time = (avg_interval - grace_period) * taps
+                total_decay = unbuffered_decay_time * decay_rate_per_sec
+            else:
+                total_decay = 0.0
+
+            effective_score = max(0.0, total_gain - total_decay)
+            reached = effective_score >= threshold
 
             return MechanicValidationResult(
                 success=reached,
@@ -110,7 +118,7 @@ class TapClimbMechanicValidator(BaseMechanicValidator):
                     "taps_count": taps,
                     "duration_seconds": duration,
                     "taps_per_second": round(taps / duration, 2),
-                    "required_taps_per_sec_to_climb": round(decay_rate_per_sec / gain_per_tap, 2),
+                    "grace_period_seconds": grace_period,
                     "effective_score": round(effective_score, 2),
                 },
             )

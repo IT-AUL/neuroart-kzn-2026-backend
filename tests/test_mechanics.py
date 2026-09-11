@@ -63,6 +63,59 @@ def test_trace_validator_geometry():
     assert res_bad.details["max_deviation_px"] > 20.0
 
 
+def test_tap_climb_grace_period():
+    validator = TapClimbMechanicValidator()
+    params = {
+        "gain_per_tap": 4.0,
+        "decay_per_interval": 1.0,
+        "decay_interval_seconds": 0.3,
+        "grace_period_seconds": 1.0,
+        "success_threshold": 100.0,
+    }
+
+    # Pauses of 0.8s between taps are within 1.0s grace period -> no decay
+    timestamps = [i * 0.8 for i in range(26)]
+    res = validator.validate(params, {"tap_timestamps": timestamps})
+    assert res.success is True
+    assert res.max_score_reached >= 100.0
+
+    # Long pauses of 2.5s (> 1.0s grace period) -> decays 1.5s / 0.3 = 5 points per tap interval
+    timestamps_slow = [i * 2.5 for i in range(10)]
+    res_slow = validator.validate(params, {"tap_timestamps": timestamps_slow})
+    assert res_slow.success is False
+
+
+def test_tap_strike_validator():
+    from app.services.mechanics.tap_strike import TapStrikeMechanicValidator
+
+    strike_validator = TapStrikeMechanicValidator()
+    res1 = strike_validator.validate({}, {"hit_wedge": True})
+    assert res1.success is True
+
+    res2 = strike_validator.validate({}, {"strike_performed": True})
+    assert res2.success is True
+
+    res3 = strike_validator.validate({}, {"taps_count": 0, "hit_wedge": False})
+    assert res3.success is False
+
+
+@pytest.mark.asyncio
+async def test_api_trace_with_wedge_strike(client: AsyncClient):
+    session_id = str(uuid.uuid4())
+    headers = {"X-Session-ID": session_id}
+
+    payload = {
+        "user_path": [{"x": 0.1, "y": 0.2}, {"x": 0.5, "y": 0.5}],
+        "hit_wedge": True,
+    }
+    response = await client.post("/progress/loc_1_shurale", json=payload, headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_new_unlock"] is True
+    assert data["artifact"]["id"] == "klin"
+    assert data["validation"]["details"]["hit_wedge"] is True
+
+
 @pytest.mark.asyncio
 async def test_api_tap_climb_success(client: AsyncClient):
     session_id = str(uuid.uuid4())
@@ -109,3 +162,4 @@ async def test_api_verify_simulation_endpoint(client: AsyncClient):
     data = response.json()
     assert data["success"] is True
     assert data["score"] >= 100.0
+

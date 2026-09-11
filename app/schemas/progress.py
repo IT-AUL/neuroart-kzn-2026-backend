@@ -34,6 +34,16 @@ class ProgressSubmitRequest(BaseModel):
         description="Array of relative timestamps (in seconds) for each tap",
     )
 
+    # Strike / Tap Wedge fields
+    hit_wedge: Optional[bool] = Field(
+        default=None,
+        description="Whether wedge was struck by player's tap",
+    )
+    strike_performed: Optional[bool] = Field(
+        default=None,
+        description="Confirmation of strike/axe action performed",
+    )
+
     # Freeform / custom telemetry
     extra_data: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -54,6 +64,10 @@ class ProgressSubmitRequest(BaseModel):
             data["duration_seconds"] = self.duration_seconds
         if self.tap_timestamps is not None:
             data["tap_timestamps"] = self.tap_timestamps
+        if self.hit_wedge is not None:
+            data["hit_wedge"] = self.hit_wedge
+        if self.strike_performed is not None:
+            data["strike_performed"] = self.strike_performed
         if self.extra_data:
             data.update(self.extra_data)
         return data

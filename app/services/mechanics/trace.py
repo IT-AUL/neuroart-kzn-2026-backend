@@ -86,15 +86,20 @@ class TraceMechanicValidator(BaseMechanicValidator):
             # Verify coordinates are in normalized range 0.0 - 1.0
             in_bounds = all(0.0 <= p[0] <= 1.0 and 0.0 <= p[1] <= 1.0 for p in user_points)
             if in_bounds:
+                details_payload: Dict[str, Any] = {
+                    "points_count": len(user_points),
+                    "reference_status": "placeholder_artist_export",
+                }
+                if "hit_wedge" in submission_data:
+                    details_payload["hit_wedge"] = submission_data["hit_wedge"]
+                if "strike_performed" in submission_data:
+                    details_payload["strike_performed"] = submission_data["strike_performed"]
                 return MechanicValidationResult(
                     success=True,
                     score=100.0,
                     max_score_reached=100.0,
                     message="Trace contour accepted (validated normalized bounds 0.0 - 1.0)",
-                    details={
-                        "points_count": len(user_points),
-                        "reference_status": "placeholder_artist_export",
-                    },
+                    details=details_payload,
                 )
 
         # Case 2: Reference path is a concrete list of points
